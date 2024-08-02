@@ -392,6 +392,7 @@ int main(int argc, char *argv[])
 		pixelData = coverData + gpCoverFileHdr->bfOffBits;
 
 		displayFileInfo(gCoverPathFileName, gpCoverFileHdr, gpCoverFileInfoHdr, gpCoverPalette, pixelData);
+		parsePixelData(gpCoverFileInfoHdr, pixelData);
 	}
 	return 0;
 } // main
