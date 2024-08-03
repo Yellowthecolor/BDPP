@@ -400,9 +400,9 @@ int main(int argc, char* argv[])
 
 		if (isValidBitMap(messageData))
 		{
-			// gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
-
-			// gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
+			
+			gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
+			gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
 
 			msgPixelData = messageData + gpCoverFileHdr->bfOffBits;
 		}

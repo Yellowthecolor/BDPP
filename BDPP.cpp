@@ -443,13 +443,26 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 void embedData(blockInfo* currentBlock, int blockNumber, unsigned char* bitsInMsg)
 {
 	int temp = currentBlock->matrix[1][1];
-	currentBlock->matrix[1][1] = *bitsInMsg;
+	printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
+	if (currentBlock->matrix[1][1] == 1)
+		currentBlock->matrix[1][1] = 0;
+	else if (currentBlock->matrix[1][1] == 0)
+		currentBlock->matrix[1][1] = 1;
+	else
+	{
+		printf("Error - %d is not a bit. Data may not be binary.\n\n", currentBlock->matrix[1][1]);
+		exit(-1);
+	}
+	printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
 	diagonalPartition(currentBlock, blockNumber);
 	connectivityTest(currentBlock, blockNumber);
-	if (!currentBlock->ratioCheck && !currentBlock->hvdCheck)
+	if (!currentBlock->ratioCheck || !currentBlock->hvdCheck)
 	{
 		currentBlock->matrix[1][1] = temp;
 		printf("Data Embedding Failed for Block %d\n", blockNumber);
+    return;
 	}
+
+	currentBlock->matrix[1][1] = *bitsInMsg;
 
 }
