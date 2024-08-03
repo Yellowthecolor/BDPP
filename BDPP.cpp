@@ -25,6 +25,7 @@ struct blockInfo
 	int V = 0;
 	int D = 0;
 	int ratioCheck = 0; // 0 = not passed ratio check, 1 = passed ratio check
+	int hvdCheck = 0; // 0 = not passed hvd check, 1 = passed hvd check
 	unsigned int middlePixel;
 	blockRatios currentBlockRatios;
 };
@@ -32,13 +33,17 @@ struct blockInfo
 void diagonalPartition(blockInfo* currentBlock, int blockNumber);
 void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue);
 void connectivityTest(blockInfo* currentBlock, int blockNumber);
+void embedData(blockInfo* currentBlock, int blockNumber, unsigned char* bitsInMsg);
 
-void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData)
+void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
+	unsigned char* msgPixelData, unsigned int* gMsgFileSize)
 {
 	unsigned int numberOfPixels = pFileInfo->biWidth * pFileInfo->biHeight;
 	unsigned int imageSize = pFileInfo->biSizeImage;
 	unsigned char* bitsInImage;
 	bitsInImage = (unsigned char*)malloc(sizeof(unsigned char) * numberOfPixels);
+	unsigned char* bitsInMsg;
+	bitsInMsg = (unsigned char*)malloc(sizeof(unsigned char) * numberOfPixels);
 
 	int bitCounter = 0;
 	for (int i = 0; i < imageSize; i++)
@@ -51,23 +56,48 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData)
 		}
 	}
 
-	printf("\n");
-	printf("%d", bitCounter);
-	printf(" %d", numberOfPixels);
-	printf("\n");
-
-	int j = 2048;
-	for (int j = 2048; j >= 0; j -= 1024) {
-		for (int i = 0; i < 3/*bitCounter*/; i++)
+	int msgBitCounter = 0;
+	for (int i = 0; i < *gMsgFileSize; i++)
+	{
+		for (int j = 7; j >= 0; j--)
 		{
-
-			printf("%u", bitsInImage[i + j]);
-			if ((i + 1) % 8 == 0)
-				printf(" ");
+			unsigned char currentBit = ((*(msgPixelData + i) >> j) & 1);
+			bitsInMsg[msgBitCounter] = currentBit;
+			msgBitCounter++;
 		}
-		printf("\n");
 	}
+
+	printf("\nMessage Bits: \n");
+	//for (int i = 0; i < *gMsgFileSize; i++)
+	for (int i = 0; i < 1; i++)
+	{
+		for (int j = 0; j < 8; j++)
+		{
+			printf("%u", bitsInMsg[i * 8 + j]);
+		}
+		printf(" ");
+	}
+	printf(" %d\n", *gMsgFileSize);
 	printf("\n\n");
+
+	// printing for debugging
+	  // printf("\n");
+	  // printf("%d", bitCounter);
+	  // printf(" %d", numberOfPixels);
+	  // printf("\n");
+
+	  // int j = 2048;
+	  // for (int j = 2048; j >= 0; j -= 1024) {
+	  // 	for (int i = 0; i < 3/*bitCounter*/; i++)
+	  // 	{
+
+	  // 		printf("%u", bitsInImage[i + j]);
+	  // 		if ((i + 1) % 8 == 0)
+	  // 			printf(" ");
+	  // 	}
+	  // 	printf("\n");
+	  // }
+	  // printf("\n\n");
 
 	int blockHeight = floor(pFileInfo->biHeight / 3);
 	int blockWidth = floor(pFileInfo->biWidth / 3);
@@ -146,19 +176,32 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData)
 	for (int i = 0; i < 4; i++)
 	{
 		diagonalPartition(&blockArray[i], blockArray[i].blockNumber);
+		if (!blockArray[i].ratioCheck) continue;
 		connectivityTest(&blockArray[i], blockArray[i].blockNumber);
+		if (!blockArray[i].ratioCheck) continue;
+		embedData(&blockArray[i], blockArray[i].blockNumber, &bitsInMsg[i]);
+	}
+
+	for (int k = 0; k < 4; k++)
+	{
+		printf("Block Number: %d\n", blockArray[k].blockNumber);
+		printf("Block Matrix: \n");
+		for (int i = 0; i < 3; i++)
+		{
+			for (int j = 0; j < 3; j++)
+			{
+				printf("%d ", blockArray[k].matrix[i][j]);
+			}
+			printf("\n");
+		}
 	}
 
 	return;
 } // displayFileInfo
 
 
-
-
 void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 {
-
-
 
 	currentBlock->middlePixel = currentBlock->matrix[1][1];
 
@@ -167,6 +210,15 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 
 	//partition ratio counters zeroes to ones
 	struct blockRatios* currentBlockRatios = &currentBlock->currentBlockRatios;
+
+	// reset ratios to zero
+	currentBlock->currentBlockRatios.sixToZero = 0;
+	currentBlock->currentBlockRatios.fiveToOne = 0;
+	currentBlock->currentBlockRatios.fourToTwo = 0;
+	currentBlock->currentBlockRatios.threeToThree = 0;
+	currentBlock->currentBlockRatios.twoToFour = 0;
+	currentBlock->currentBlockRatios.oneToFive = 0;
+	currentBlock->currentBlockRatios.zeroToSix = 0;
 
 	//upper left block
 	int checkedValue = 0;
@@ -261,6 +313,11 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 	{
 		currentBlock->ratioCheck = 1;
 	}
+	else
+	{
+		currentBlock->ratioCheck = 0;
+		printf("Ratio Check Failed for Block %d\n", blockNumber);
+	}
 
 	// prints used for debugging
 	printf("Unique Ratios: %d\n", currentBlockRatios->totalUniqueRatios);
@@ -317,55 +374,60 @@ void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue)
 // Test connectivitity of consecutive 0s in the matrix
 void connectivityTest(blockInfo* currentBlock, int blockNumber)
 {
-	// check if ratio check passed
-	if (currentBlock->ratioCheck == 1)
+	int i, j;
+
+	// Horizontal and Diagonal Connectivity Check
+	j = 1;
+	for (i = 0; i < 3; i++)
 	{
-
-		int i, j;
-
-		// Horizontal and Diagonal Connectivity Check
-		j = 1;
-		for (i = 0; i < 3; i++)
+		if (currentBlock->matrix[i][j] == 0)
 		{
-			if (currentBlock->matrix[i][j] == 0)
+			// Horizontal connectivity check
+			if (currentBlock->matrix[i][j - 1] == 0 || currentBlock->matrix[i][j + 1] == 0)
 			{
-				// Horizontal connectivity check
-				if (currentBlock->matrix[i][j - 1] == 0 || currentBlock->matrix[i][j + 1] == 0)
-				{
-					currentBlock->H = 1;
-				}
+				currentBlock->H = 1;
+			}
 
-				// Diagonal connectivity check
-				if (i == 1 || i == 0)
+			// Diagonal connectivity check
+			if (i == 1 || i == 0)
+			{
+				if (currentBlock->matrix[i + 1][j - 1] == 0 || currentBlock->matrix[i + 1][j + 1] == 0)
 				{
-					if (currentBlock->matrix[i + 1][j - 1] == 0 || currentBlock->matrix[i + 1][j + 1] == 0)
-					{
-						currentBlock->D = 1;
-					}
+					currentBlock->D = 1;
 				}
-				if (i == 1 || i == 2)
+			}
+			if (i == 1 || i == 2)
+			{
+				if (currentBlock->matrix[i - 1][j - 1] == 0 || currentBlock->matrix[i - 1][j + 1] == 0)
 				{
-					if (currentBlock->matrix[i - 1][j - 1] == 0 || currentBlock->matrix[i - 1][j + 1] == 0)
-					{
-						currentBlock->D = 1;
-					}
+					currentBlock->D = 1;
 				}
 			}
 		}
+	}
 
-		// Vertical Connectivity Check
-		i = 1;
-		for (j = 0; j < 3; j++)
+	// Vertical Connectivity Check
+	i = 1;
+	for (j = 0; j < 3; j++)
+	{
+		if (currentBlock->matrix[i][j] == 0)
 		{
-			if (currentBlock->matrix[i][j] == 0)
+			// Vertical connectivity check
+			if (currentBlock->matrix[i + 1][j] == 0 || currentBlock->matrix[i - 1][j] == 0)
 			{
-				// Vertical connectivity check
-				if (currentBlock->matrix[i + 1][j] == 0 || currentBlock->matrix[i - 1][j] == 0)
-				{
-					currentBlock->V = 1;
-				}
+				currentBlock->V = 1;
 			}
 		}
+	}
+
+	if (currentBlock->H && currentBlock->V && currentBlock->D)
+	{
+		currentBlock->hvdCheck = 1;
+	}
+	else
+	{
+		currentBlock->hvdCheck = 0;
+		printf("HVD Check Failed for Block %d\n", blockNumber);
 	}
 
 	// prints used for debugging
@@ -373,6 +435,21 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 	printf("Horizontal Connectivity: %d\n", currentBlock->H);
 	printf("Vertical Connectivity: %d\n", currentBlock->V);
 	printf("Diagonal Connectivity: %d\n", currentBlock->D);
+	printf("HVD Check: %d\n", currentBlock->hvdCheck);
 	printf("\n");
 	return;
+}
+
+void embedData(blockInfo* currentBlock, int blockNumber, unsigned char* bitsInMsg)
+{
+	int temp = currentBlock->matrix[1][1];
+	currentBlock->matrix[1][1] = *bitsInMsg;
+	diagonalPartition(currentBlock, blockNumber);
+	connectivityTest(currentBlock, blockNumber);
+	if (!currentBlock->ratioCheck && !currentBlock->hvdCheck)
+	{
+		currentBlock->matrix[1][1] = temp;
+		printf("Data Embedding Failed for Block %d\n", blockNumber);
+	}
+
 }

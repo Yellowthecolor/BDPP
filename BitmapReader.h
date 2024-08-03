@@ -14,6 +14,9 @@
 #define ACTION_HIDE		1
 #define ACTION_EXTRACT	2
 
+void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
+    unsigned char* msgPixelData, unsigned int* gMsgFileSize);
+
 // the following structure information is taken from wingdi.h
 
 /* constants for the biCompression field
@@ -48,7 +51,7 @@ typedef struct tagBITMAPINFOHEADER // (40 bytes)
         LONG       biYPelsPerMeter;		// 0, or optional vertical resolution
         unsigned int      biClrUsed;			// colors actually used (normally zero, can be lower than biBitCount)
         unsigned int      biClrImportant;		// important colors actualy used (normally zero)
-} BITMAPINFOHEADER;	
+} BITMAPINFOHEADER;
 
 typedef struct tagRGBQUAD
 {

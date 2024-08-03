@@ -2,19 +2,18 @@
 //
 
 #include "BitmapReader.h"
-#include "BDPP.h"
 
 // Global Variables for File Data Pointers
 
-BITMAPFILEHEADER *gpCoverFileHdr, *gpStegoFileHdr;
-BITMAPINFOHEADER *gpCoverFileInfoHdr, *gpStegoFileInfoHdr;
-RGBQUAD *gpCoverPalette, *gpStegoPalette;
+BITMAPFILEHEADER* gpCoverFileHdr, * gpStegoFileHdr, * gpMsgFileHdr;
+BITMAPINFOHEADER* gpCoverFileInfoHdr, * gpStegoFileInfoHdr, * gpMsgFileInfoHdr;
+RGBQUAD* gpCoverPalette, * gpStegoPalette;
 unsigned int gCoverFileSize, gMsgFileSize, gStegoFileSize;
 
 // Command Line Global Variables
-char gCoverPathFileName[MAX_PATH], *gCoverFileName;
-char gMsgPathFileName[MAX_PATH], *gMsgFileName;
-char gStegoPathFileName[MAX_PATH], *gStegoFileName;
+char gCoverPathFileName[MAX_PATH], * gCoverFileName;
+char gMsgPathFileName[MAX_PATH], * gMsgFileName;
+char gStegoPathFileName[MAX_PATH], * gStegoFileName;
 //char gInputPathFileName[MAX_PATH], *gInputFileName;
 //char gOutputPathFileName[MAX_PATH], *gOutputFileName;
 char gAction;						// typically hide (1), extract (2), wipe (3), randomize (4), but also specifies custom actions for specific programs
@@ -24,8 +23,10 @@ void initGlobals()
 {
 	gpCoverFileHdr = NULL;
 	gpStegoFileHdr = NULL;
+	gpMsgFileHdr = NULL;
 	gpCoverFileInfoHdr = NULL;
 	gpStegoFileInfoHdr = NULL;
+	gpMsgFileInfoHdr = NULL;
 	gpCoverPalette = NULL;
 	gpStegoPalette = NULL;
 	gCoverFileSize = gMsgFileSize = gStegoFileSize = 0;
@@ -68,20 +69,20 @@ void initGlobals()
 //} // buildGrayCode
 
 // Show the various bitmap header bytes primarily for debugging
-void displayFileInfo(char *pFileName,
-					 BITMAPFILEHEADER *pFileHdr, 
-					 BITMAPINFOHEADER *pFileInfo,
-					 RGBQUAD *ptrPalette,
-					 unsigned char *pixelData)
+void displayFileInfo(char* pFileName,
+	BITMAPFILEHEADER* pFileHdr,
+	BITMAPINFOHEADER* pFileInfo,
+	RGBQUAD* ptrPalette,
+	unsigned char* pixelData)
 {
 	int numColors, i;
 
 	printf("\nFile Information for %s: \n\n", pFileName);
 	printf("File Header Info:\n");
-	printf("File Type: %c%c\nFile Size:%d\nData Offset:%d\n\n", 
+	printf("File Type: %c%c\nFile Size:%d\nData Offset:%d\n\n",
 		(pFileHdr->bfType & 0xFF), (pFileHdr->bfType >> 8), pFileHdr->bfSize, pFileHdr->bfOffBits);
 
-	switch(pFileInfo->biBitCount)
+	switch (pFileInfo->biBitCount)
 	{
 	case 1:
 		numColors = 2;
@@ -105,20 +106,20 @@ void displayFileInfo(char *pFileName,
 	printf("Bit Map Image Info:\n\nSize Info Header:%d\nWidth:%d\nHeight:%d\nPlanes:%d\n"
 		"Bits/Pixel:%d ==> %d colors\n"
 		"Compression:%d\nImage Size:%d\nRes X:%d\nRes Y:%d\nColors:%d\nImportant Colors:%d\n\n",
-		pFileInfo->biSize, 
-		pFileInfo->biWidth, 
-		pFileInfo->biHeight, 
-		pFileInfo->biPlanes, 
+		pFileInfo->biSize,
+		pFileInfo->biWidth,
+		pFileInfo->biHeight,
+		pFileInfo->biPlanes,
 		pFileInfo->biBitCount, numColors,
-		pFileInfo->biCompression, 
-		pFileInfo->biSizeImage, 
+		pFileInfo->biCompression,
+		pFileInfo->biSizeImage,
 		pFileInfo->biXPelsPerMeter,
 		pFileInfo->biYPelsPerMeter,
 		pFileInfo->biClrUsed,
 		pFileInfo->biClrImportant);
 
 	//	There are no palettes
-	if(pFileInfo->biBitCount > 16 || numColors == -1)
+	if (pFileInfo->biBitCount > 16 || numColors == -1)
 	{
 		printf("\nNo Palette\n\n");
 	}
@@ -126,7 +127,7 @@ void displayFileInfo(char *pFileName,
 	{
 		printf("Palette:\n\n");
 
-		for(i = 0; i < numColors; i++)
+		for (i = 0; i < numColors; i++)
 		{
 			printf("R:%02x   G:%02x   B:%02x\n", ptrPalette->rgbRed, ptrPalette->rgbGreen, ptrPalette->rgbBlue);
 			ptrPalette++;
@@ -135,32 +136,32 @@ void displayFileInfo(char *pFileName,
 
 	// print first 24 bytes of pixel data
 	printf("\n Pixel Data: \n\n");
-	for(int i = 0; i < 24; i++)
+	for (int i = 0; i < 24; i++)
 	{
-		printf("%02X ", *(pixelData + i) );
+		printf("%02X ", *(pixelData + i));
 	}
 	printf("\n\n");
 	return;
 } // displayFileInfo
 
 // quick check for bitmap file validity - you may want to expand this or be more specfic for a particular bitmap type
-bool isValidBitMap(char *filedata)
+bool isValidBitMap(unsigned char* filedata)
 {
-	if( filedata[0] != 'B' || filedata[1] != 'M') return false;
+	if (filedata[0] != 'B' || filedata[1] != 'M') return false;
 
 	return true;
 } // isValidBitMap
 
 
 // reads specified bitmap file from disk
-unsigned char *readBitmapFile(char *fileName, unsigned int *fileSize)
+unsigned char* readBitmapFile(char* fileName, unsigned int* fileSize)
 {
-	FILE *ptrFile;
-	unsigned char *pFile;
+	FILE* ptrFile;
+	unsigned char* pFile;
 
 	ptrFile = fopen(fileName, "rb");	// specify read only and binary (no CR/LF added)
 
-	if(ptrFile == NULL)
+	if (ptrFile == NULL)
 	{
 		printf("Error in opening file: %s.\n\n", fileName);
 		exit(-1);
@@ -171,9 +172,9 @@ unsigned char *readBitmapFile(char *fileName, unsigned int *fileSize)
 	fseek(ptrFile, 0, SEEK_SET);
 
 	// malloc memory to hold the file, include room for the header and color table
-	pFile = (unsigned char *) malloc(*fileSize);
+	pFile = (unsigned char*)malloc(*fileSize);
 
-	if(pFile == NULL)
+	if (pFile == NULL)
 	{
 		printf("Error - Could not allocate %d bytes of memory for bitmap file.\n\n", *fileSize);
 		exit(-1);
@@ -189,24 +190,24 @@ unsigned char *readBitmapFile(char *fileName, unsigned int *fileSize)
 
 // writes modified bitmap file to disk
 // gMask used to determine the name of the file
-int writeFile(char *filename, int fileSize, unsigned char *pFile)
+int writeFile(char* filename, int fileSize, unsigned char* pFile)
 {
-	FILE *ptrFile;
+	FILE* ptrFile;
 	int x;
 
 	// open the new file, MUST set binary format (text format will add line feed characters)
 	ptrFile = fopen(filename, "wb+");
-	if(ptrFile == NULL)
+	if (ptrFile == NULL)
 	{
 		printf("Error opening file (%s) for writing.\n\n", filename);
 		exit(-1);
 	}
 
 	// write the file
-	x = (int) fwrite(pFile, sizeof(unsigned char), fileSize, ptrFile);
+	x = (int)fwrite(pFile, sizeof(unsigned char), fileSize, ptrFile);
 
 	// check for success
-	if(x != fileSize)
+	if (x != fileSize)
 	{
 		printf("Error writing file %s.\n\n", filename);
 		exit(-1);
@@ -216,7 +217,7 @@ int writeFile(char *filename, int fileSize, unsigned char *pFile)
 } // writeFile
 
 // prints help message to the screen
-void Usage(char *programName)
+void Usage(char* programName)
 {
 	char prgname[MAX_PATH];
 	int idx;
@@ -224,7 +225,7 @@ void Usage(char *programName)
 	idx = strlen(programName);
 	while (idx >= 0)
 	{
-		if(programName[idx] == '\\') break;
+		if (programName[idx] == '\\') break;
 		idx--;
 	}
 
@@ -251,11 +252,11 @@ void Usage(char *programName)
 	exit(0);
 } // Usage
 
-void parseCommandLine(int argc, char *argv[])
+void parseCommandLine(int argc, char* argv[])
 {
 	int cnt;
 
-	if(argc < 2) Usage(argv[0]);
+	if (argc < 2) Usage(argv[0]);
 
 	// RESET Parameters to make error checking easier
 	gAction = 0;
@@ -263,18 +264,18 @@ void parseCommandLine(int argc, char *argv[])
 	gMsgPathFileName[0] = 0;
 	gStegoPathFileName[0] = 0;
 	cnt = 1;
-	while(cnt < argc)	// argv[0] = program name
+	while (cnt < argc)	// argv[0] = program name
 	{
-		if(_stricmp(argv[cnt], "-c") == 0)	// cover file
+		if (_stricmp(argv[cnt], "-c") == 0)	// cover file
 		{
 			cnt++;
-			if(cnt == argc)
+			if (cnt == argc)
 			{
-				fprintf(stderr, "\n\nError - no file name following <%s> parameter.\n\n", argv[cnt-1]);
+				fprintf(stderr, "\n\nError - no file name following <%s> parameter.\n\n", argv[cnt - 1]);
 				exit(-1);
 			}
 
-			if(gCoverPathFileName[0] != 0)
+			if (gCoverPathFileName[0] != 0)
 			{
 				fprintf(stderr, "\n\nError - cover file <%s> already specified.\n\n", gCoverPathFileName);
 				exit(-2);
@@ -283,17 +284,16 @@ void parseCommandLine(int argc, char *argv[])
 			GetFullPathName(argv[cnt], MAX_PATH, gCoverPathFileName, &gCoverFileName);
 		}
 
-		/*
-		else if(_stricmp(argv[cnt], "-m") == 0)	// msg file
+		else if (_stricmp(argv[cnt], "-m") == 0)	// msg file
 		{
 			cnt++;
-			if(cnt == argc)
+			if (cnt == argc)
 			{
-				fprintf(stderr, "\n\nError - no file name following <%s> parameter.\n\n", argv[cnt-1]);
+				fprintf(stderr, "\n\nError - no file name following <%s> parameter.\n\n", argv[cnt - 1]);
 				exit(-1);
 			}
 
-			if(gMsgPathFileName[0] != 0)
+			if (gMsgPathFileName[0] != 0)
 			{
 				fprintf(stderr, "\n\nError - message file <%s> already specified.\n\n", gMsgPathFileName);
 				exit(-2);
@@ -301,6 +301,8 @@ void parseCommandLine(int argc, char *argv[])
 
 			GetFullPathName(argv[cnt], MAX_PATH, gMsgPathFileName, &gMsgFileName);
 		}
+
+		/*
 		else if(_stricmp(argv[cnt], "-s") == 0) // stego file
 		{
 			cnt++;
@@ -336,9 +338,10 @@ void parseCommandLine(int argc, char *argv[])
 				exit(-1);
 			}
 		}
-		else if(_stricmp(argv[cnt], "-hide") == 0)	// hide
+		*/
+		else if (_stricmp(argv[cnt], "-hide") == 0)	// hide
 		{
-			if(gAction)
+			if (gAction)
 			{
 				fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
 				exit(-1);
@@ -346,16 +349,16 @@ void parseCommandLine(int argc, char *argv[])
 
 			gAction = ACTION_HIDE;
 		}
-		else if(_stricmp(argv[cnt], "-extract") == 0)	// extract
-		{
-			if(gAction)
-			{
-				fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
-				exit(-1);
-			}
+		// else if(_stricmp(argv[cnt], "-extract") == 0)	// extract
+		// {
+		// 	if(gAction)
+		// 	{
+		// 		fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
+		// 		exit(-1);
+		// 	}
 
-			gAction = ACTION_EXTRACT;
-		}
+		// 	gAction = ACTION_EXTRACT;
+		// }
 		//*/
 
 		cnt++;
@@ -366,9 +369,9 @@ void parseCommandLine(int argc, char *argv[])
 
 // Main function
 // Parameters are used to indicate the input file and available options
-int main(int argc, char *argv[])
+int main(int argc, char* argv[])
 {
-	unsigned char *coverData, *pixelData;
+	unsigned char* coverData, * pixelData, * messageData, * msgPixelData;
 
 	// get the number of bits to use for data hiding or data extracting
 	// if not specified, default to one
@@ -376,24 +379,67 @@ int main(int argc, char *argv[])
 
 	parseCommandLine(argc, argv);
 
-// take appropriate actions based on user inputs
-// example opening cover bitmap
+	// take appropriate actions based on user inputs
+	// example opening cover bitmap
 
-	if(gCoverPathFileName[0] != 0)
+	if (gCoverPathFileName[0] != 0)
 	{
 		coverData = readBitmapFile(gCoverPathFileName, &gCoverFileSize);
 
-		gpCoverFileHdr = (BITMAPFILEHEADER *) coverData;
+		if (!isValidBitMap(coverData))
+		{
+			printf("Error - %s is not a valid bitmap file.\n\n", gCoverPathFileName);
+			exit(-1);
+		}
 
-		gpCoverFileInfoHdr = (BITMAPINFOHEADER *) (coverData + sizeof(BITMAPFILEHEADER) );
+		gpCoverFileHdr = (BITMAPFILEHEADER*)coverData;
+
+		gpCoverFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
+
+		messageData = readBitmapFile(gMsgPathFileName, &gMsgFileSize);
+
+		if (isValidBitMap(messageData))
+		{
+			// gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
+
+			// gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
+
+			msgPixelData = messageData + gpCoverFileHdr->bfOffBits;
+		}
+		else
+		{
+			msgPixelData = messageData;
+			gMsgFileSize = strlen((char*)messageData);
+		}
 
 		// there might not exist a palette - I don't check here, but you can see how in display info
-		gpCoverPalette = (RGBQUAD *) ( (char *) coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER) );
+		gpCoverPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
 
 		pixelData = coverData + gpCoverFileHdr->bfOffBits;
 
 		displayFileInfo(gCoverPathFileName, gpCoverFileHdr, gpCoverFileInfoHdr, gpCoverPalette, pixelData);
-		parsePixelData(gpCoverFileInfoHdr, pixelData);
+		parsePixelData(gpCoverFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize);
+
+		printf(" %d\n", gMsgFileSize);
+		printf(" %d\n", gpMsgFileHdr->bfSize);
+		printf(" %d\n", gpMsgFileHdr->bfOffBits);
+		printf(" %d\n", gpCoverFileInfoHdr->biSizeImage);
+		printf("\n");
+		printf(" %d\n", gpCoverFileHdr->bfSize);
+		printf(" %d\n", gpCoverFileHdr->bfOffBits);
+		printf(" %d\n", gpCoverFileInfoHdr->biSizeImage);
+
+		switch (gAction)
+		{
+		case ACTION_HIDE:
+			// hideBmpStudent();
+			break;
+		case ACTION_EXTRACT:
+			// extractBmpLSB();
+			break;
+		default:
+			break;
+		} // end switch
 	}
 	return 0;
 } // main
