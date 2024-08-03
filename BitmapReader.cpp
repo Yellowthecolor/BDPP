@@ -2,6 +2,7 @@
 //
 
 #include "BitmapReader.h"
+#include "BDPP.h"
 
 // Global Variables for File Data Pointers
 
