@@ -178,7 +178,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		diagonalPartition(&blockArray[i], blockArray[i].blockNumber);
 		if (!blockArray[i].ratioCheck) continue;
 		connectivityTest(&blockArray[i], blockArray[i].blockNumber);
-		if (!blockArray[i].ratioCheck) continue;
+		if (!blockArray[i].hvdCheck) continue;
 		embedData(&blockArray[i], blockArray[i].blockNumber, &bitsInMsg[i]);
 	}
 
@@ -205,8 +205,8 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 
 	currentBlock->middlePixel = currentBlock->matrix[1][1];
 
-	printf("Block Number: %d\n", blockNumber);
-	printf("Middle Pixel: %d\n", currentBlock->middlePixel);
+	// printf("Block Number: %d\n", blockNumber);
+	// printf("Middle Pixel: %d\n", currentBlock->middlePixel);
 
 	//partition ratio counters zeroes to ones
 	struct blockRatios* currentBlockRatios = &currentBlock->currentBlockRatios;
@@ -320,16 +320,16 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 	}
 
 	// prints used for debugging
-	printf("Unique Ratios: %d\n", currentBlockRatios->totalUniqueRatios);
-	printf("6:0 = %d\n", currentBlockRatios->sixToZero);
-	printf("5:1 = %d\n", currentBlockRatios->fiveToOne);
-	printf("4:2 = %d\n", currentBlockRatios->fourToTwo);
-	printf("3:3 = %d\n", currentBlockRatios->threeToThree);
-	printf("2:4 = %d\n", currentBlockRatios->twoToFour);
-	printf("1:5 = %d\n", currentBlockRatios->oneToFive);
-	printf("0:6 = %d\n", currentBlockRatios->zeroToSix);
-	printf("Ratio Check: %d\n", currentBlock->ratioCheck);
-	printf("\n");
+	// printf("Unique Ratios: %d\n", currentBlockRatios->totalUniqueRatios);
+	// printf("6:0 = %d\n", currentBlockRatios->sixToZero);
+	// printf("5:1 = %d\n", currentBlockRatios->fiveToOne);
+	// printf("4:2 = %d\n", currentBlockRatios->fourToTwo);
+	// printf("3:3 = %d\n", currentBlockRatios->threeToThree);
+	// printf("2:4 = %d\n", currentBlockRatios->twoToFour);
+	// printf("1:5 = %d\n", currentBlockRatios->oneToFive);
+	// printf("0:6 = %d\n", currentBlockRatios->zeroToSix);
+	// printf("Ratio Check: %d\n", currentBlock->ratioCheck);
+	// printf("\n");
 	return;
 }
 
@@ -431,11 +431,11 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 	}
 
 	// prints used for debugging
-	printf("Block Number: %d\n", blockNumber);
-	printf("Horizontal Connectivity: %d\n", currentBlock->H);
-	printf("Vertical Connectivity: %d\n", currentBlock->V);
-	printf("Diagonal Connectivity: %d\n", currentBlock->D);
-	printf("HVD Check: %d\n", currentBlock->hvdCheck);
+	// printf("Block Number: %d\n", blockNumber);
+	// printf("Horizontal Connectivity: %d\n", currentBlock->H);
+	// printf("Vertical Connectivity: %d\n", currentBlock->V);
+	// printf("Diagonal Connectivity: %d\n", currentBlock->D);
+	// printf("HVD Check: %d\n", currentBlock->hvdCheck);
 	printf("\n");
 	return;
 }
@@ -443,7 +443,7 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 void embedData(blockInfo* currentBlock, int blockNumber, unsigned char* bitsInMsg)
 {
 	int temp = currentBlock->matrix[1][1];
-	printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
+	//printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
 	if (currentBlock->matrix[1][1] == 1)
 		currentBlock->matrix[1][1] = 0;
 	else if (currentBlock->matrix[1][1] == 0)
@@ -453,7 +453,7 @@ void embedData(blockInfo* currentBlock, int blockNumber, unsigned char* bitsInMs
 		printf("Error - %d is not a bit. Data may not be binary.\n\n", currentBlock->matrix[1][1]);
 		exit(-1);
 	}
-	printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
+	//printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
 	diagonalPartition(currentBlock, blockNumber);
 	connectivityTest(currentBlock, blockNumber);
 	if (!currentBlock->ratioCheck || !currentBlock->hvdCheck)
