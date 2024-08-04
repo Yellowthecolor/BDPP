@@ -1,10 +1,38 @@
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
+// Block Diagonal Partition Pattern (BDPP) Algorithm
+// Authors: John A. Ortiz
+// Modified by: Roberto Delgado, Mark Solis, Daniel Zartuche
+//
+// This program uses the Block-Diagonal Partition Pattern (BDPP) algorithm to hide and extract data from a bitmap image.
+// This method of hiding was developed by Gyankamal J.Chhajed and Bindu Garg in 2023
+// 
+// This program's implementation of the BDPP algorithm was designed by Roberto Delgado
+// The algorithm is as follows:
+// 1. The image is divided into 3x3 blocks.
+// 2. Each block is then diagonally partitioned into 4 sections. Pixels split in half are counted as whole.
+// 3. Each section is checked for a ratio of 0s to 1s in the block's matrix. The ratios are 6:0, 5:1, 4:2, 3:3, 2:4, 1:5, 0:6.
+// 4. If a block has 2 or more unique ratios, it passes the ratio check.
+// 5. The block is then checked for horizontal, vertical, and diagonal connectivity of 0s.
+//    this means that there must be at least 2 zeros connected horizontally, vertically, and diagonally.
+//    if this is true then the block is said to be HVD connected.
+// 6. If the block passes both the ratio check and the HVD check, then the block is embeddable.
+// 7. The middle pixel of the block is then flipped steps 2-5 are repeated for all blocks.
+// 8. If the block still passes both checks, then the middle pixel is flipped back to its original value.
+//    and the block is marked as embeddable.
+// 9. The program then embeds the message data into the embeddable blocks or if extracting, extracts the data
+//    from the embeddable blocks based on the key value provided.
+//
 
 #include "BitmapReader.h"
 
+
+/*
+* Structure: blockRatios
+* Usage: blockRatios currentBlockRatios;
+* ------------------------------------------------------
+* This structure is used to store the ratios for the
+* ratio check. The ratio is 0s and 1s in a 3x3 block 
+* matrix.
+*/
 struct blockRatios
 {
 	int sixToZero = 0;  //  6:0
@@ -15,28 +43,42 @@ struct blockRatios
 	int oneToFive = 0;   //  1:5
 	int zeroToSix = 0;   //  0:6
 	int totalUniqueRatios = 0;
-};
+};  // blockRatios
 
+/*
+* Structure: blockInfo
+* Usage: blockInfo currentBlock;
+* ------------------------------------------------------
+* This structure is used to store the information for
+* each 3x3 block in the image. This includes the block
+* number, the 3x3 matrix, the middle pixel, the HVD
+* check, the ratio check, and whether the block is
+* embeddable. It also store the blockRatios structure
+* for the individual blocks.
+*/
 struct blockInfo
 {
-	int blockNumber;
-	int matrix[3][3];
+	int blockNumber;  //  used to identify the block, primarily for debugging
+	int matrix[3][3]; // 3x3 matrix of the block, stores the pixel values
 	int H = 0;
-	int V = 0;
-	int D = 0;
+	int V = 0; // Horizontal, Vertical, Diagonal connectivity,
+	int D = 0; // 0 = not connected, 1 = connected
 	int ratioCheck = 0; // 0 = not passed ratio check, 1 = passed ratio check
 	int hvdCheck = 0; // 0 = not passed hvd check, 1 = passed hvd check
 	int isEmbeddable = 0; // 0 = not embeddable, 1 = embeddable
 	unsigned int middlePixel;
-	blockRatios currentBlockRatios;
-};
+	blockRatios currentBlockRatios;  // structure to store the ratios for the ratio check
+};  // blockInfo
 
-void diagonalPartition(blockInfo* currentBlock, int blockNumber);
-void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue);
-void connectivityTest(blockInfo* currentBlock, int blockNumber);
-void embedData(blockInfo* currentBlock, int blockNumber);
-void printMatrix(blockInfo* block);
-
+/*
+* Function: parsePixelData
+* Usage: parsePixelData(pFileInfo, pixelData, msgPixelData, gMsgFileSize, extractedBits, gKey, action);
+* ------------------------------------------------------
+* This function is used to parse the pixel data from the
+* image run the BDPP algorithm to embed or extract data
+* and then reassamble the pixel data to be written back,
+* or to be used for extraction.
+*/
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 	unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractedBits, int gKey, int action)
 {
@@ -156,19 +198,19 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		gKey = bitIndex;
 		if (bitIndex < totalMsgBits)
 		{
-			printf("Error - Message too large to embed in image, possible message Data loss.\n");
+			printf("Error - Message too large to embed in image, possible message Data loss.\n\n");
 		}
 		else
 		{
-			printf("Message Embedded Successfully\n\n");
+			printf("\n\nMessage Embedded Successfully\n");
 		}
-		printf("Key Value (Used when extracting): %d\n", gKey);
+		printf("Key Value (Used when extracting): %d\n\n", gKey);
 		printf("Message Size: %d bits\n", totalMsgBits);
 		printf("Total Blocks: %d\n", totalPossibleBlocks);
 		printf("Embeddable Blocks: %d\n", embeddableBlocks);
 		printf("Embedded Blocks Used: %d\n", bitIndex);
 		printf("Hiding Capacity: %d bits | %d bytes\n", embeddableBlocks, embeddableBlocks / 8);
-		printf("Percentage Capacity Used: %f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
+		printf("Percentage Capacity Used: %.2f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
 
 		// Modify pixelData using totalPossibleBlocks.
 		int randomCounter = 0;
@@ -225,8 +267,16 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 	}
 
 	return;
-} // displayFileInfo
+} // parsePixelData
 
+
+/*
+* Function: printMatrix
+* Usage: printMatrix(&blockArray[i]);
+* ------------------------------------------------------
+* This function is used to print the 3x3 matrix of a
+* block mostly for debugging.
+*/
 void printMatrix(blockInfo* block) {
 	printf("Block Number: %d\n", block->blockNumber);
 	printf("Block Matrix: \n");
@@ -238,8 +288,19 @@ void printMatrix(blockInfo* block) {
 		}
 		printf("\n");
 	}
-}
+}  // printMatrix
 
+
+/*
+* Function: diagonalPartition
+* Usage: diagonalPartition(&blockArray[i], int blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function splits each 3x3 block diagonally into 4
+* sections upper left, upper right, lower left, and lower
+* right. It then calls checkBlockRatios to check the ratio
+* of 0s to 1s. If the block has 2 or more unique ratios
+* it passes the ratio check (ratioCheck = 1).
+*/
 void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 {
 

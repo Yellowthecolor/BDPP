@@ -1,4 +1,9 @@
 // Bitmap Reader
+// Authors: John A. Ortiz
+// Modified by: Roberto Delgado, Mark Solis, Daniel Zartuche
+//
+// This program uses the Block-Diagonal Partition Pattern (BDPP) algorithm to hide and extract data from a bitmap image.
+// This method of hiding was developed by Gyankamal J.Chhajed and Bindu Garg in 2023
 //
 
 #include "BitmapReader.h"
@@ -19,6 +24,7 @@ char gOutputPathFileName[MAX_PATH], * gOutputFileName;
 char gAction;						// typically hide (1), extract (2), wipe (3), randomize (4), but also specifies custom actions for specific programs
 char gNumBits2Hide;
 int gKey;
+int gInfo;
 
 void initGlobals()
 {
@@ -42,33 +48,10 @@ void initGlobals()
 	gAction = 0;						// typically hide (1), extract (2)
 	gNumBits2Hide = 1;
 	gKey = -1;
+	gInfo = 0;
 
 	return;
 } // initGlobals
-
-// this function builds the canonical gray code array variables
-//void buildGrayCode()
-//{
-//	int i, length, posUp, posDw, cnt;
-//
-//	length = 1;
-//	toCGC[0] = 0;
-//	toPBC[0] = 0;
-//	cnt = 1;
-//
-//	while(length < 256)
-//	{
-//		posUp = length - 1;
-//		posDw = length;
-//		for(i = 0; i < length; i++)
-//		{
-//			toCGC[i + posDw] = toCGC[posUp - i] + length;
-//			toPBC[toCGC[i + posDw]] = cnt++;
-//		}
-//		length = length * 2;
-//	}
-//	return;
-//} // buildGrayCode
 
 // Show the various bitmap header bytes primarily for debugging
 void displayFileInfo(char* pFileName,
@@ -233,22 +216,49 @@ void Usage(char* programName)
 
 	strcpy(prgname, &programName[idx + 1]);
 	fprintf(stdout, "\n\n");
+	fprintf(stdout, " ***** %s Version: %s ***** \n       ... by John A. Ortiz, Roberto Delgado, Mark Solis, Daniel Zartuche\n\n", prgname, VERSION);
+	fprintf(stdout, "USAGE INFORMATION\n\n");
 
-	fprintf(stdout, "To print bitmap information:\n\n");
-	fprintf(stdout, "%s -c < filename.bmp >\n\n", prgname);
+	fprintf(stdout, "Print Bitmap Information:\n");
+	fprintf(stdout, "%s -i < filename.bmp >\n", prgname);
+	fprintf(stdout, "  *This parameter supercedes all other options, and exits\n\n");
 
-	/*
-	fprintf(stdout, "To Hide:\n");
-	fprintf(stdout, "\t%s -hide -c <cover file> -m <msg file> [-s <stego file>] [-b <number of bits>]\n\n", prgname);
 
-	fprintf(stdout, "To Extract:\n");
-	fprintf(stdout, "\t%s -extract -s <stego file> [-m <message file>] [-b <number of bits>]\n\n", prgname);
+	fprintf(stdout, "Hide:\n");
+	fprintf(stdout, "%s -hide -c <cover file> -m <msg file> [-o <stego file>]\n", prgname);
+	fprintf(stdout, "Hide with random message data:\n");
+	fprintf(stdout, "%s -hide -c <cover file> -m random [-o <stego file>]\n", prgname);
+	fprintf(stdout, "  *Cover file should be a bitmap file\n");
+	fprintf(stdout, "  *Hiding capacity may vary between files, therefore we recommend\n");
+	fprintf(stdout, "   the message be at most half the size of the cover file.\n");
+	fprintf(stdout, "  *Random message data is generated based on the cover image width value.\n");
+	fprintf(stdout, "  *If no output file is specified, the default is hiding_output.bmp.\n\n");
+
+	fprintf(stdout, "Extract:\n");
+	fprintf(stdout, "%s -extract -s <stego file> -k <key value> [-o <message file>] \n", prgname);
+	fprintf(stdout, "  *Stego file should be a bitmap file\n");
+	fprintf(stdout, "  *Key value is generated when an image is hidden\n");
+	fprintf(stdout, "  *Key value is equal to the hidden message bits\n");
+	fprintf(stdout, "  *Using an incorrect key may extract incorrect information\n");
+	fprintf(stdout, "  *If no output file is specified, the default is extraction_output.bin.\n\n");
+
+	fprintf(stdout, "Help:\n");
+	fprintf(stdout, "%s -h\n", prgname);
+	fprintf(stdout, "  *Displays this help screen\n----------------------------------------------\n");
 
 	fprintf(stdout, "Parameters:\n");
-	fprintf(stdout, "Set number of bits to hide per pixel:	-b ( 1 to 8 def:1 )\n\n");
+	fprintf(stdout, "Display this usage help scree: ..... -h\n");
+	fprintf(stdout, "Display Bitmap Information: ........ -i < filename.bmp >\n");
+	fprintf(stdout, "Hide Data: ......................... -hide\n");
+	fprintf(stdout, "Extract Data: ...................... -extract\n");
+	fprintf(stdout, "Set the value of the cover file: ... -c < filename.bmp >\n");
+	fprintf(stdout, "Set the value of the stego file: ... -s < filename.bmp >\n");
+	fprintf(stdout, "Set the value of the extraction key:	-k ( Positive Integer )\n");
+	fprintf(stdout, "Set the value of the message file: . -m < filename.bmp >\n");
+	fprintf(stdout, "Set the value of the output file: .. -o < filename.bmp >\n");
 
-	fprintf(stdout, "\n\tNOTES:\n\t1.Order of parameters is irrelevant.\n\t2.All selections in \"[]\" are optional.\n\n");
-	//*/
+
+	fprintf(stdout, "\n\tNOTES:\n\t1. Order of parameters is irrelevant.\n\t2. All selections in \"[]\" are optional.\n\n");
 
 	system("pause");
 	exit(0);
@@ -341,7 +351,7 @@ void parseCommandLine(int argc, char* argv[])
 
 			GetFullPathName(argv[cnt], MAX_PATH, gOutputPathFileName, &gOutputFileName);
 		}
-		else if (_stricmp(argv[cnt], "-k") == 0)	// key file
+		else if (_stricmp(argv[cnt], "-k") == 0)	// key value
 		{
 			cnt++;
 			if (cnt == argc)
@@ -352,26 +362,28 @@ void parseCommandLine(int argc, char* argv[])
 
 			gKey = atoi(argv[cnt]);
 		}
-		/*
-		else if(_stricmp(argv[cnt], "-b") == 0)	// set number of bits to hide per data block
+		else if (_stricmp(argv[cnt], "-h") == 0)	// help
+		{
+			Usage(argv[0]);
+		}
+		else if (_stricmp(argv[cnt], "-i") == 0)  // info
 		{
 			cnt++;
-			if(cnt == argc)
+			if (cnt == argc)
 			{
-				fprintf(stderr, "\n\nInput Error - no number following '%s' parameter.\n\n", argv[cnt-1]);
+				fprintf(stderr, "\n\nError - no file name following '%s' parameter.\n\n", argv[cnt - 1]);
 				exit(-1);
 			}
 
-			// the range for gNumBits2Hide is 1 - 8
-			gNumBits2Hide = *(argv[cnt]) - 48;
-
-			if(gNumBits2Hide < 1 || gNumBits2Hide > 8)	// for this program, 8 is the max
+			if (gCoverPathFileName[0] != 0)
 			{
-				fprintf(stderr, "\n\nThe number of bits to hide is out of range (1 - 8).\n\n");
-				exit(-1);
+				fprintf(stderr, "\n\nError - input file <%s> already specified.\n\n", gCoverPathFileName);
+				exit(-2);
 			}
+
+			GetFullPathName(argv[cnt], MAX_PATH, gCoverPathFileName, &gCoverFileName);
+			gInfo = 1;
 		}
-		*/
 		else if (_stricmp(argv[cnt], "-hide") == 0)	// hide
 		{
 			if (gAction)
@@ -399,29 +411,60 @@ void parseCommandLine(int argc, char* argv[])
 		}
 
 		cnt++;
-		if (cnt == argc && gAction == 0)
-		{
-			fprintf(stderr, "\n\nError - no action specified.\n\n");
-			exit(-1);
-		}
-		if (cnt == argc && gAction == ACTION_EXTRACT && gKey == -1)
-		{
-			fprintf(stderr, "\n\nError - no key specified.\n\n");
-			exit(-1);
-		}
-		if (cnt == argc && gOutputPathFileName[0] == 0)
-		{
-			if (gAction == ACTION_HIDE)
-			{
-				GetFullPathName("hiding_output.bmp", MAX_PATH, gOutputPathFileName, &gOutputFileName);
-			}
-			else if (gAction == ACTION_EXTRACT)
-			{
-				GetFullPathName("extraction_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
-			}
 
+		// error checking for parameters
+		if (gInfo == 0)
+		{
+			if (cnt == argc && gAction == 0)
+			{
+				fprintf(stderr, "\n\nError - no action specified.\n\n");
+				exit(-1);
+			}
+			if (cnt == argc && gAction == 0)
+			{
+				fprintf(stderr, "\n\nError - no action specified.\n\n");
+				exit(-1);
+			}
+			if (cnt == argc && gAction == ACTION_EXTRACT && gKey == -1)
+			{
+				fprintf(stderr, "\n\nError - no key specified.\n\n");
+				exit(-1);
+			}
+			if (cnt == argc && gOutputPathFileName[0] == 0)
+			{
+				if (gAction == ACTION_HIDE)
+				{
+					GetFullPathName("hiding_output.bmp", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+				}
+				else if (gAction == ACTION_EXTRACT)
+				{
+					GetFullPathName("extraction_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+				}
+			}
+			if (cnt == argc && gMsgPathFileName[0] == 0 && gAction == ACTION_HIDE)
+			{
+				fprintf(stderr, "\n\nError - no message file specified.\n\n");
+				exit(-1);
+			}
+			if (cnt == argc && gStegoPathFileName[0] == 0 && gAction == ACTION_EXTRACT)
+			{
+				fprintf(stderr, "\n\nError - no stego file specified.\n\n");
+				exit(-1);
+			}
+			if (cnt == argc && gCoverPathFileName[0] == 0 && gAction == ACTION_HIDE)
+			{
+				fprintf(stderr, "\n\nError - no cover file specified.\n\n");
+				exit(-1);
+			}
 		}
-
+		else
+		{
+			if (cnt == argc && gCoverPathFileName[0] == 0)
+			{
+				fprintf(stderr, "\n\nError - no cover file specified.\n\n");
+				exit(-1);
+			}
+		}
 
 	} // end while loop
 
@@ -432,8 +475,8 @@ void parseCommandLine(int argc, char* argv[])
 // Parameters are used to indicate the input file and available options
 int main(int argc, char* argv[])
 {
-	unsigned char* coverData, * pixelData, * messageData, * msgPixelData;
-	unsigned char* extractBits;
+	unsigned char* coverData, * pixelData, * messageData, * msgPixelData;  // used to store file data for cover and message
+	unsigned char* extractBits;  // used to store extracted bits
 
 
 	// get the number of bits to use for data hiding or data extracting
@@ -445,7 +488,8 @@ int main(int argc, char* argv[])
 	// take appropriate actions based on user inputs
 	// example opening cover bitmap
 
-	if (gAction == ACTION_HIDE)
+	// Necessary to display information about the bitmap file and exit before any other action
+	if (gInfo == 1)
 	{
 		if (gCoverPathFileName[0] != 0)
 		{
@@ -466,23 +510,50 @@ int main(int argc, char* argv[])
 
 			pixelData = coverData + gpTypeFileHdr->bfOffBits;
 
-			//displayFileInfo(gCoverPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpCoverPalette, pixelData);
+			displayFileInfo(gCoverPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpCoverPalette, pixelData);
+			exit(0);
+		}
+	} // end if gInfo
 
-			if (_stricmp(gMsgFileName, "random") == 0)
+	// hide or extract data
+	if (gAction == ACTION_HIDE)
+	{
+		if (gCoverPathFileName[0] != 0)
+		{
+			coverData = readBitmapFile(gCoverPathFileName, &gCoverFileSize);
+
+			if (!isValidBitMap(coverData))  //  check if cover is usable for hiding, should be bmp
+			{
+				printf("Error - %s is not a valid bitmap file.\n\n", gCoverPathFileName);
+				exit(-1);
+			}
+
+			gpTypeFileHdr = (BITMAPFILEHEADER*)coverData;
+
+			gpTypeFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
+
+			// there might not exist a palette - I don't check here, but you can see how in display info
+			gpCoverPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
+
+			pixelData = coverData + gpTypeFileHdr->bfOffBits;
+
+			//  check if message is random, if so generate random data based on the cover image width 
+			// (almost guarantees data will be small enough to hide)
+			if (_stricmp(gMsgFileName, "random") == 0)  
 			{
 				// generate random data
 				srand((unsigned int)time(NULL));
 				unsigned int maxMsgFilesSize = gpTypeFileInfoHdr->biWidth;
 				gMsgFileSize = rand() % maxMsgFilesSize;
 				messageData = (unsigned char*)malloc(sizeof(unsigned char) * gMsgFileSize);
-				printf("Random message data size: %d\n", gMsgFileSize);
+				printf("\nRandom message data size: %d", gMsgFileSize);
 				for (int i = 0; i < gMsgFileSize; i++)
 				{
 					messageData[i] = rand() % 256;
 				}
-				msgPixelData = messageData;
+				msgPixelData = messageData;  //  no header data
 			}
-			else
+			else  //  read the file and check if it is a bitmap or not
 			{
 				messageData = readBitmapFile(gMsgPathFileName, &gMsgFileSize);
 				if (isValidBitMap(messageData))
@@ -497,8 +568,9 @@ int main(int argc, char* argv[])
 					gMsgFileSize = strlen((char*)messageData);
 				}
 			}
+			// extract bits needs to bee set to be able to enter parsePixelData, so we allocate the bare minimum
 			extractBits = (unsigned char*)malloc(sizeof(unsigned char) * 1);
-
+			printf("\nAttempting to hide in %s\n", gCoverPathFileName);
 		}
 		else
 		{
@@ -508,12 +580,13 @@ int main(int argc, char* argv[])
 	}
 	else if (gAction == ACTION_EXTRACT)
 	{
+		// basic setting to prep the data for parsing (reading checking)
 		if (gStegoPathFileName[0] != 0)
 		{
+			//have to allocate msgPixelData to be able to enter parsePixelData
+			//we allocate the expected size of the hidden message plust a little extra just in case
 			msgPixelData = (unsigned char*)malloc(sizeof(unsigned char) * gKey * 2);
 			coverData = readBitmapFile(gStegoPathFileName, &gStegoFileSize);
-
-
 
 			if (!isValidBitMap(coverData))
 			{
@@ -530,10 +603,10 @@ int main(int argc, char* argv[])
 			// there might not exist a palette - I don't check here, but you can see how in display info
 			gpStegoPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
 
+			// extractBits is allocated to the size of the key since the key is the size of the hidden message
 			extractBits = (unsigned char*)malloc(sizeof(unsigned char) * gKey);
+			printf("\nAttempting to extract from %s\n", gStegoPathFileName);
 
-
-			//displayFileInfo(gStegoPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpStegoPalette, pixelData);
 		}
 		else
 		{
@@ -542,8 +615,8 @@ int main(int argc, char* argv[])
 		}
 	}
 
+	// parse the pixel data, hides, extracts, and performs all checks for the BDPP algorithm
 	parsePixelData(gpTypeFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize, extractBits, gKey, gAction);
-
 
 	unsigned char headerData[14];
 	unsigned char headerDataInfo[40];
@@ -561,15 +634,16 @@ int main(int argc, char* argv[])
 		fwrite(gpCoverPalette, 1, 8, f1);
 		fwrite(pixelData, 1, count, f1);
 		fclose(f1);
+
+		printf("Message hidden in %s\n", gOutputPathFileName);
 		break;
 	}
 	case ACTION_EXTRACT:
 	{
-		// extracting to a binary file
 		f1 = fopen(gOutputFileName, "wb");
 		fwrite(extractBits, 1, gKey, f1);
 		fclose(f1);
-		//writeFile(gOutputFileName, gMsgFileSize, extractBits);
+		printf("Message extracted to %s\n", gOutputPathFileName);
 		break;
 	}
 	}

@@ -1,4 +1,6 @@
 // LSB_Steg Header File
+// Authors: John A. Ortiz
+// Modified by: Roberto Delgado, Mark Solis, Daniel Zartuche
 //
 
 #define _CRT_SECURE_NO_WARNINGS
@@ -9,6 +11,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 
 #define SUCCESS 0
 #define FAILURE -1
@@ -16,8 +19,34 @@
 #define ACTION_HIDE		1
 #define ACTION_EXTRACT	2
 
+#define VERSION "1.0"
+
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
     unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractBytes, int gKey, int action);
+
+/*
+* Function: printMatrix
+* Usage: printMatrix(&blockArray[i]);
+* ------------------------------------------------------
+* This function is used to print the 3x3 matrix of a
+* block mostly for debugging.
+*/
+void printMatrix(blockInfo* block);
+
+/*
+* Function: diagonalPartition
+* Usage: diagonalPartition(&blockArray[i], int blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function splits each 3x3 block diagonally into 4
+* sections upper left, upper right, lower left, and lower
+* right. It then calls checkBlockRatios to check the ratio
+* of 0s to 1s. If the block has 2 or more unique ratios
+* it passes the ratio check (ratioCheck = 1).
+*/
+void diagonalPartition(blockInfo* currentBlock, int blockNumber);
+void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue);
+void connectivityTest(blockInfo* currentBlock, int blockNumber);
+void embedData(blockInfo* currentBlock, int blockNumber);
 // the following structure information is taken from wingdi.h
 
 /* constants for the biCompression field
