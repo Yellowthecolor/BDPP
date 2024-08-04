@@ -411,11 +411,11 @@ void parseCommandLine(int argc, char* argv[])
 		}
 		if (cnt == argc && gOutputPathFileName[0] == 0)
 		{
-			if(gAction == ACTION_HIDE)
+			if (gAction == ACTION_HIDE)
 			{
 				GetFullPathName("hiding_output.bmp", MAX_PATH, gOutputPathFileName, &gOutputFileName);
 			}
-			else if(gAction == ACTION_EXTRACT)
+			else if (gAction == ACTION_EXTRACT)
 			{
 				GetFullPathName("extraction_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
 			}
@@ -466,7 +466,7 @@ int main(int argc, char* argv[])
 
 			pixelData = coverData + gpTypeFileHdr->bfOffBits;
 
-			displayFileInfo(gCoverPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpCoverPalette, pixelData);
+			//displayFileInfo(gCoverPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpCoverPalette, pixelData);
 
 			if (_stricmp(gMsgFileName, "random") == 0)
 			{
@@ -544,6 +544,7 @@ int main(int argc, char* argv[])
 
 	parsePixelData(gpTypeFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize, extractBits, gKey, gAction);
 
+
 	unsigned char headerData[14];
 	unsigned char headerDataInfo[40];
 	memcpy(headerData, coverData, 14);
@@ -552,24 +553,25 @@ int main(int argc, char* argv[])
 	size_t count = gpTypeFileHdr->bfSize - gpTypeFileHdr->bfOffBits;
 	switch (gAction)
 	{
-		case ACTION_HIDE:
-		{
-			f1 = fopen(gOutputFileName, "wb");
-			fwrite(headerData, 1, 14, f1);
-			fwrite(headerDataInfo, 1, 40, f1);
-			fwrite(gpCoverPalette, 1, 8, f1);
-			fwrite(pixelData, 1, count, f1);
-			fclose(f1);
-			break;
-		}
-		case ACTION_EXTRACT:
-		{
-			// extracting to a binary file
-			f1 = fopen(gOutputFileName, "wb");
-			fclose(f1);
-			//writeFile(gOutputFileName, gMsgFileSize, extractBits);
-			break;
-		}
+	case ACTION_HIDE:
+	{
+		f1 = fopen(gOutputFileName, "wb");
+		fwrite(headerData, 1, 14, f1);
+		fwrite(headerDataInfo, 1, 40, f1);
+		fwrite(gpCoverPalette, 1, 8, f1);
+		fwrite(pixelData, 1, count, f1);
+		fclose(f1);
+		break;
+	}
+	case ACTION_EXTRACT:
+	{
+		// extracting to a binary file
+		f1 = fopen(gOutputFileName, "wb");
+		fwrite(extractBits, 1, gKey, f1);
+		fclose(f1);
+		//writeFile(gOutputFileName, gMsgFileSize, extractBits);
+		break;
+	}
 	}
 	return 0;
 } // main
