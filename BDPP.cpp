@@ -26,6 +26,7 @@ struct blockInfo
 	int D = 0;
 	int ratioCheck = 0; // 0 = not passed ratio check, 1 = passed ratio check
 	int hvdCheck = 0; // 0 = not passed hvd check, 1 = passed hvd check
+	int isEmbeddable = 0; // 0 = not embeddable, 1 = embeddable
 	unsigned int middlePixel;
 	blockRatios currentBlockRatios;
 };
@@ -33,7 +34,7 @@ struct blockInfo
 void diagonalPartition(blockInfo* currentBlock, int blockNumber);
 void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue);
 void connectivityTest(blockInfo* currentBlock, int blockNumber);
-bool embedData(blockInfo* currentBlock, int blockNumber, unsigned char bitsInMsg);
+void embedData(blockInfo* currentBlock, int blockNumber);
 void printMatrix(blockInfo* block);
 bool flippedEmbeddingTest(blockInfo* currentBlock, bool maintainValue);
 
@@ -58,7 +59,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		}
 	}
 
-	int msgBitCounter = 0;
+	unsigned int msgBitCounter = 0;
 	for (int i = 0; i < *gMsgFileSize; i++)
 	{
 		for (int j = 7; j >= 0; j--)
@@ -68,6 +69,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			msgBitCounter++;
 		}
 	}
+	unsigned int totalMsgBits = msgBitCounter;
 
 	printf("\nMessage Bits: \n");
 	//for (int i = 0; i < *gMsgFileSize; i++)
@@ -103,19 +105,16 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 
 	int blockHeight = floor(pFileInfo->biHeight / 3);
 	int blockWidth = floor(pFileInfo->biWidth / 3);
-	int totalBlocks = blockWidth * blockHeight;
+	int totalPossibleBlocks = blockWidth * blockHeight;
 
-	printf("%d %d\n%d\n", blockHeight, blockWidth, totalBlocks);
+	printf("%d %d\n%d\n", blockHeight, blockWidth, totalPossibleBlocks);
 
 	blockInfo* blockArray;
-	blockArray = (blockInfo*)malloc(sizeof(blockInfo) * totalBlocks);
+	blockArray = (blockInfo*)malloc(sizeof(blockInfo) * totalPossibleBlocks);
 
 	bitCounter = 0;
 	int multiplier = 0;
 	int breakingpoint = 0;
-	// int bitCTwo = 0;
-	// int trash = 0;
-	// int finalmult = 0;
 	size_t rowSize = ((pFileInfo->biWidth + 7) / 8 + 3) & ~3;
 	for (int i = 0; i < blockHeight; i++)
 	{
@@ -139,24 +138,21 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 					{
 						breakingpoint = 1;
 						break;
-						// bitCounter = bitCounter;
-						// bitCTwo = bitCounter + pFileInfo->biWidth * multiplier;
-						// trash = i * blockWidth + j;
 					}
 
 					currentBlock.matrix[k][l] = (pixelData[byteIndex] & (1 << bitIndex)) ? 1 : 0;
 					bitCounter++;
 				}
+				if (breakingpoint) break;
 				bitCounter = bitCounter - 3;
 				multiplier++;
-				if (breakingpoint) break;
-			}
 
+			}
+			if (breakingpoint) break;
 			blockArray[i * blockWidth + j] = currentBlock;
 			bitCounter = (i * 3 + 3) * pFileInfo->biWidth;
-
 			multiplier = 0;
-			if (breakingpoint) break;
+
 
 		}
 		if (breakingpoint) break;
@@ -164,103 +160,109 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 
 	// printf("bitcounter: %d\n", bitCounter);
 	// printf("multi bit counter %d\n", bitCTwo);
-	// printf("Total Blocks %d\n", totalBlocks);
-	// printf("Total pixels in blocks %d\n", totalBlocks * 9);
+	// printf("Total Blocks %d\n", totalPossibleBlocks);
+	// printf("Total pixels in blocks %d\n", totalPossibleBlocks * 9);
 	// printf("Allocated blocks %d\n", blockArray[trash].blockNumber);
 	// printf("Number of Pixels: %d\n\n", numberOfPixels);
 
-	for (int k = 0; k < 4; k++)
+	int embeddableBlocks = 0;
+	for (int i = 0; i < totalPossibleBlocks; i++)
 	{
-		printf("Block Number: %d\n", blockArray[k].blockNumber);
-		printf("Block Matrix: \n");
-		for (int i = 0; i < 3; i++)
-		{
-			for (int j = 0; j < 3; j++)
-			{
-				printf("%d ", blockArray[k].matrix[i][j]);
-			}
-			printf("\n");
-		}
-	}
-
-	unsigned char byte = 0;
-	size_t bitIndex = 0;
-	size_t byteIndex = 0;
-	for (int i = 0; i < totalBlocks; i++)
-	{
-		blockInfo* currentBlock = &blockArray[i];
-		int blockNumber = currentBlock->blockNumber;
-
 		diagonalPartition(&blockArray[i], blockArray[i].blockNumber);
 		if (!blockArray[i].ratioCheck) continue;
 		connectivityTest(&blockArray[i], blockArray[i].blockNumber);
 		if (!blockArray[i].hvdCheck) continue;
-
-
-        if (action == ACTION_HIDE) {
-            int suitability = flippedEmbeddingTest(currentBlock, false);
-            byte = bitsInMsg[bitIndex++]; // where "byte" in this case is actually bit
-            
-            if (suitability) {
-	            currentBlock->matrix[1][1] = byte;
-	            // printf("block number %d has data %u.\n", blockNumber, byte);
-            } else {
-                bitIndex--;
-            }
-
-        } else if (action == ACTION_EXTRACT) {
-		    int blockNumber = currentBlock->blockNumber;
-            int suitability = flippedEmbeddingTest(currentBlock, true);
-            if (!suitability) continue;
-
-            blockInfo& block = blockArray[i];
-            int centerValue = block.matrix[1][1];
-		    // printf("cv = %d, bn = %d\n", centerValue, currentBlock->blockNumber);
-
-		    byte |= (centerValue << (7 - bitIndex));
-		    bitIndex++;
-		    if (bitIndex == 8) {
-		    	bits[byteIndex] = byte;
-		    	bitIndex = 0;
-		    	byte = 0;
-		    	byteIndex += 1;
-		    }
-        }
-    }
-	
-	for (int k = 0; k < 4; k++)
-	{
-		printf("Block Number: %d\n", blockArray[k].blockNumber);
-		printf("Block Matrix: \n");
-		for (int i = 0; i < 3; i++)
-		{
-			for (int j = 0; j < 3; j++)
-			{
-				printf("%d ", blockArray[k].matrix[i][j]);
-			}
-			printf("\n");
-		}
+		embedData(&blockArray[i], blockArray[i].blockNumber);
+		if (!blockArray[i].isEmbeddable) continue;
+		embeddableBlocks++;
 	}
 
-	// Modify pixelData using totalBlocks.
-	rowSize = ((pFileInfo->biWidth + 7) / 8 + 3) & ~3;
-	for (int k = 0; k < totalBlocks; k++)
+	unsigned char currentBit = 0;
+	size_t bitIndex = 0;
+	size_t byteIndex = 0;
+	switch (action)
 	{
-		int blockX = (k % blockWidth) * 3;
-		int blockY = (k / blockWidth) * 3;
-		for (int i = 0; i < 3; i++) {
-			for (int j = 0; j < 3; j++) {
-				int px = blockX + j;
-				int py = blockY + i;
-				size_t byteIndex = (py * rowSize) + (px / 8);
-				size_t bitIndex = 7 - (px % 8);
-				if (blockArray[k].matrix[i][j] == 1) {
-				    pixelData[byteIndex] |= (1 << bitIndex);
-				} else {
-				    pixelData[byteIndex] &= ~(1 << bitIndex);
+	case ACTION_HIDE:
+		for (int i = 0; i < totalPossibleBlocks; i++)
+		{
+			blockInfo* currentBlock = &blockArray[i];
+			if (bitIndex >= totalMsgBits) break;
+			if (!currentBlock->isEmbeddable) continue;
+
+			int blockNumber = currentBlock->blockNumber;
+			currentBit = bitsInMsg[bitIndex++]; // use bit before incrementing
+			currentBlock->matrix[1][1] = currentBit;
+			// printf("block number %d has data %u.\n", blockNumber, byte);
+		}
+		if (bitIndex < totalMsgBits)
+		{
+			printf("Error - Message too large to embed in image, possible message Data loss.\n");
+		}
+		else
+		{
+			printf("Message Embedded Successfully\n\n");
+			printf("Message Size: %d bits\n", totalMsgBits);
+			printf("Total Blocks: %d\n", totalPossibleBlocks);
+			printf("Embeddable Blocks: %d\n", embeddableBlocks);
+			printf("Embedded Blocks Used: %d\n", bitIndex);
+			printf("Hiding Capacity: %d bits | %d bytes\n", embeddableBlocks, embeddableBlocks / 8);
+			printf("Percentage Capacity Used: %f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
+		}
+
+		// Modify pixelData using totalPossibleBlocks.
+		rowSize = ((pFileInfo->biWidth + 7) / 8 + 3) & ~3;
+		for (int k = 0; k < totalPossibleBlocks; k++)
+		{
+			int blockX = (k % blockWidth) * 3;
+			int blockY = (k / blockWidth) * 3;
+			for (int i = 0; i < 3; i++)
+			{
+				for (int j = 0; j < 3; j++)
+				{
+					int px = blockX + j;
+					int py = blockY + i;
+					size_t byteIndex = (py * rowSize) + (px / 8);
+					size_t bitIndex = 7 - (px % 8);
+					if (blockArray[k].matrix[i][j] == 1)
+					{
+						pixelData[byteIndex] |= (1 << bitIndex);
+					}
+					else
+					{
+						pixelData[byteIndex] &= ~(1 << bitIndex);
+					}
 				}
 			}
 		}
+		break;
+
+	case ACTION_EXTRACT:
+		for (int i = 0; i < totalPossibleBlocks; i++)
+		{
+			blockInfo* currentBlock = &blockArray[i];
+			if (!currentBlock->isEmbeddable) continue;
+
+			int blockNumber = currentBlock->blockNumber;
+			int suitability = flippedEmbeddingTest(currentBlock, true);
+			if (!suitability)
+				continue;
+
+			blockInfo& block = blockArray[i];
+			int centerValue = block.matrix[1][1];
+			// printf("cv = %d, bn = %d\n", centerValue, currentBlock->blockNumber);
+
+			currentBit |= (centerValue << (7 - bitIndex));
+			bitIndex++;
+			if (bitIndex == 8)
+			{
+				bits[byteIndex] = currentBit;
+				bitIndex = 0;
+				currentBit = 0;
+				byteIndex += 1;
+			}
+		}
+		break;
+
 	}
 
 	return;
@@ -284,9 +286,6 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 
 	currentBlock->middlePixel = currentBlock->matrix[1][1];
 	currentBlock->ratioCheck = 0;
-
-	// printf("Block Number: %d\n", blockNumber);
-	// printf("Middle Pixel: %d\n", currentBlock->middlePixel);
 
 	//partition ratio counters zeroes to ones
 	struct blockRatios* currentBlockRatios = &currentBlock->currentBlockRatios;
@@ -396,20 +395,9 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 	else
 	{
 		currentBlock->ratioCheck = 0;
-		printf("Ratio Check Failed for Block %d\n", blockNumber);
+		//printf("Ratio Check Failed for Block %d\n", blockNumber);
 	}
 
-	// prints used for debugging
-	// printf("Unique Ratios: %d\n", currentBlockRatios->totalUniqueRatios);
-	// printf("6:0 = %d\n", currentBlockRatios->sixToZero);
-	// printf("5:1 = %d\n", currentBlockRatios->fiveToOne);
-	// printf("4:2 = %d\n", currentBlockRatios->fourToTwo);
-	// printf("3:3 = %d\n", currentBlockRatios->threeToThree);
-	// printf("2:4 = %d\n", currentBlockRatios->twoToFour);
-	// printf("1:5 = %d\n", currentBlockRatios->oneToFive);
-	// printf("0:6 = %d\n", currentBlockRatios->zeroToSix);
-	// printf("Ratio Check: %d\n", currentBlock->ratioCheck);
-	// printf("\n");
 	return;
 }
 
@@ -513,7 +501,7 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 	else
 	{
 		currentBlock->hvdCheck = 0;
-		printf("HVD Check Failed for Block %d\n", blockNumber);
+		//printf("HVD Check Failed for Block %d\n", blockNumber);
 	}
 
 	// prints used for debugging
@@ -526,9 +514,10 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 	return;
 }
 
-bool flippedEmbeddingTest(blockInfo* currentBlock, bool maintainValue) {
-    int blockNumber = currentBlock->blockNumber;
-    int temp = currentBlock->matrix[1][1];
+bool flippedEmbeddingTest(blockInfo* currentBlock, bool maintainValue)
+{
+	int blockNumber = currentBlock->blockNumber;
+	int temp = currentBlock->matrix[1][1];
 	if (currentBlock->matrix[1][1] == 1)
 		currentBlock->matrix[1][1] = 0;
 	else if (currentBlock->matrix[1][1] == 0)
@@ -538,29 +527,49 @@ bool flippedEmbeddingTest(blockInfo* currentBlock, bool maintainValue) {
 		printf("Error - %d is not a bit. Data may not be binary.\n\n", currentBlock->matrix[1][1]);
 		exit(-1);
 	}
+
 	diagonalPartition(currentBlock, blockNumber);
 	connectivityTest(currentBlock, blockNumber);
 	if (!currentBlock->ratioCheck || !currentBlock->hvdCheck)
 	{
-        if (!maintainValue) {
-		    currentBlock->matrix[1][1] = temp;
-        }
+		if (!maintainValue)
+		{
+			currentBlock->matrix[1][1] = temp;
+		}
 		printf("Data Embedding Failed for Block %d\n", blockNumber);
-        return false;
+		return false;
 	}
-    if (maintainValue) {
+	if (maintainValue) {
 		currentBlock->matrix[1][1] = temp;
-    }
-    return true;
+	}
+	return true;
 }
 
-bool embedData(blockInfo* currentBlock, int blockNumber, unsigned char dataByte)
+
+void embedData(blockInfo* currentBlock, int blockNumber)
 {
-    int suitability = flippedEmbeddingTest(currentBlock, false);
-    if (flippedEmbeddingTest(currentBlock, false)) {
-	    currentBlock->matrix[1][1] = dataByte;
-	    printf("block number %d has data %u.\n", blockNumber, dataByte);
-    }
-	return suitability;
+	int temp = currentBlock->matrix[1][1];
+	//printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
+	if (currentBlock->matrix[1][1] == 1)
+		currentBlock->matrix[1][1] = 0;
+	else if (currentBlock->matrix[1][1] == 0)
+		currentBlock->matrix[1][1] = 1;
+	else
+	{
+		printf("Error - %d is not a bit. Data may not be binary.\n\n", currentBlock->matrix[1][1]);
+		exit(-1);
+	}
+	//printf("matrix[1][1] = %d\n\n\n", currentBlock->matrix[1][1]);
+	diagonalPartition(currentBlock, blockNumber);
+	connectivityTest(currentBlock, blockNumber);
+	if (!currentBlock->ratioCheck || !currentBlock->hvdCheck)
+	{
+		currentBlock->matrix[1][1] = temp;
+		currentBlock->isEmbeddable = 0;
+		//printf("Data Embedding Failed for Block %d\n", blockNumber);
+		return;
+	}
+
+	currentBlock->isEmbeddable = 1;
 
 }

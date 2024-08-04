@@ -7,6 +7,8 @@
 #include <stdio.h>
 #include <io.h>
 #include <math.h>
+#include <stdlib.h>
+#include <time.h>
 
 #define SUCCESS 0
 #define FAILURE -1
