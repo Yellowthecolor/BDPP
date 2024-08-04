@@ -143,7 +143,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		}
 		totalMsgBits = msgBitCounter;
 
-		for (int i = 0; i < totalPossibleBlocks; i++)
+    for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
 			if (bitIndex >= totalMsgBits) break;
@@ -161,16 +161,18 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		else
 		{
 			printf("Message Embedded Successfully\n\n");
-			printf("Key Value (Used when extracting): %d\n", gKey);
-			printf("Message Size: %d bits\n", totalMsgBits);
-			printf("Total Blocks: %d\n", totalPossibleBlocks);
-			printf("Embeddable Blocks: %d\n", embeddableBlocks);
-			printf("Embedded Blocks Used: %d\n", bitIndex);
-			printf("Hiding Capacity: %d bits | %d bytes\n", embeddableBlocks, embeddableBlocks / 8);
-			printf("Percentage Capacity Used: %f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
 		}
+    printf("Key Value (Used when extracting): %d\n", gKey);
+    printf("Message Size: %d bits\n", totalMsgBits);
+    printf("Total Blocks: %d\n", totalPossibleBlocks);
+    printf("Embeddable Blocks: %d\n", embeddableBlocks);
+    printf("Embedded Blocks Used: %d\n", bitIndex);
+    printf("Hiding Capacity: %d bits | %d bytes\n", embeddableBlocks, embeddableBlocks / 8);
+    printf("Percentage Capacity Used: %f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
 
 		// Modify pixelData using totalPossibleBlocks.
+    printf("\n");
+    int randomCounter = 0;
 		rowSize = ((pFileInfo->biWidth + 7) / 8 + 3) & ~3;
 		for (int k = 0; k < totalPossibleBlocks; k++)
 		{
@@ -184,17 +186,18 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 					int py = blockY + i;
 					size_t byteIndex = (py * rowSize) + (px / 8);
 					size_t bitIndex = 7 - (px % 8);
-					if (blockArray[k].matrix[i][j] == 1)
-					{
-						pixelData[byteIndex] |= (1 << bitIndex);
-					}
-					else
-					{
-						pixelData[byteIndex] &= ~(1 << bitIndex);
+          if (blockArray[k].matrix[i][j] == 1)
+          {
+            pixelData[byteIndex] |= (1 << bitIndex);
+          }
+          else
+          {
+            pixelData[byteIndex] &= ~(1 << bitIndex);
 					}
 				}
 			}
 		}
+    printf("\n");
 		break;
 	}
 	case ACTION_EXTRACT:
@@ -215,7 +218,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
     else
     {
       printf("Message Extracted Successfully\n\n");
-      printf("Extracted Bits: ");
+      printf("Extracted Bits: \n");
       for (int i = 0; i < gKey; i++)
       {
         printf("%d", extractedBits[i]);

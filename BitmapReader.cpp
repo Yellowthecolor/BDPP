@@ -413,7 +413,7 @@ void parseCommandLine(int argc, char* argv[])
 		{
 			if(gAction == ACTION_HIDE)
 			{
-				GetFullPathName("hiding_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+				GetFullPathName("hiding_output.bmp", MAX_PATH, gOutputPathFileName, &gOutputFileName);
 			}
 			else if(gAction == ACTION_EXTRACT)
 			{
@@ -564,12 +564,10 @@ int main(int argc, char* argv[])
 		}
 		case ACTION_EXTRACT:
 		{
+			// extracting to a binary file
 			f1 = fopen(gOutputFileName, "wb");
-			fwrite(headerData, 1, 14, f1);
-			fwrite(headerDataInfo, 1, 40, f1);
-			fwrite(gpStegoPalette, 1, 8, f1);
-			fwrite(extractBits, 1, count, f1);
 			fclose(f1);
+			//writeFile(gOutputFileName, gMsgFileSize, extractBits);
 			break;
 		}
 	}
