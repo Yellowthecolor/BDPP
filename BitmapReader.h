@@ -17,7 +17,7 @@
 #define ACTION_EXTRACT	2
 
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
-    unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractBytes, int action);
+    unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractBytes, int gKey, int action);
 // the following structure information is taken from wingdi.h
 
 /* constants for the biCompression field

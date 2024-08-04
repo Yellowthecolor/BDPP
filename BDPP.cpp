@@ -38,7 +38,7 @@ void embedData(blockInfo* currentBlock, int blockNumber);
 void printMatrix(blockInfo* block);
 
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
-	unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* bits, int action)
+	unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractedBits, int gKey, int action)
 {
 	unsigned int numberOfPixels = pFileInfo->biWidth * pFileInfo->biHeight;
 	unsigned int imageSize = pFileInfo->biSizeImage;
@@ -57,27 +57,13 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			bitCounter++;
 		}
 	}
-
-	unsigned int msgBitCounter = 0;
-	for (int i = 0; i < *gMsgFileSize; i++)
-	{
-		for (int j = 7; j >= 0; j--)
-		{
-			unsigned char currentBit = ((*(msgPixelData + i) >> j) & 1);
-			bitsInMsg[msgBitCounter] = currentBit;
-			msgBitCounter++;
-		}
-	}
-	unsigned int totalMsgBits = msgBitCounter;
-
 	int blockHeight = floor(pFileInfo->biHeight / 3);
 	int blockWidth = floor(pFileInfo->biWidth / 3);
 	int totalPossibleBlocks = blockWidth * blockHeight;
 
-	printf("%d %d\n%d\n", blockHeight, blockWidth, totalPossibleBlocks);
-
 	blockInfo* blockArray;
 	blockArray = (blockInfo*)malloc(sizeof(blockInfo) * totalPossibleBlocks);
+
 
 	bitCounter = 0;
 	int multiplier = 0;
@@ -136,13 +122,27 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		if (!blockArray[i].isEmbeddable) continue;
 		embeddableBlocks++;
 	}
-
+	unsigned int msgBitCounter = 0;
+	unsigned int totalMsgBits = 0;
 	unsigned char currentBit = 0;
 	size_t bitIndex = 0;
 	size_t byteIndex = 0;
 	switch (action)
 	{
 	case ACTION_HIDE:
+	{
+		msgBitCounter = 0;
+		for (int i = 0; i < *gMsgFileSize; i++)
+		{
+			for (int j = 7; j >= 0; j--)
+			{
+				unsigned char currentBit = ((*(msgPixelData + i) >> j) & 1);
+				bitsInMsg[msgBitCounter] = currentBit;
+				msgBitCounter++;
+			}
+		}
+		totalMsgBits = msgBitCounter;
+
 		for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
@@ -153,6 +153,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			currentBit = bitsInMsg[bitIndex++]; // use bit before incrementing
 			currentBlock->matrix[1][1] = currentBit;
 		}
+		gKey = bitIndex;
 		if (bitIndex < totalMsgBits)
 		{
 			printf("Error - Message too large to embed in image, possible message Data loss.\n");
@@ -160,6 +161,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		else
 		{
 			printf("Message Embedded Successfully\n\n");
+			printf("Key Value (Used when extracting): %d\n", gKey);
 			printf("Message Size: %d bits\n", totalMsgBits);
 			printf("Total Blocks: %d\n", totalPossibleBlocks);
 			printf("Embeddable Blocks: %d\n", embeddableBlocks);
@@ -194,33 +196,37 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			}
 		}
 		break;
-
+	}
 	case ACTION_EXTRACT:
+	{
 		for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
+			if (bitIndex > gKey) break;
 			if (!currentBlock->isEmbeddable) continue;
 
-			int blockNumber = currentBlock->blockNumber;
-			int suitability = flippedEmbeddingTest(currentBlock, true);
-			if (!suitability)
-				continue;
-
-			blockInfo& block = blockArray[i];
-			int centerValue = block.matrix[1][1];
-
-			currentBit |= (centerValue << (7 - bitIndex));
-			bitIndex++;
-			if (bitIndex == 8)
-			{
-				bits[byteIndex] = currentBit;
-				bitIndex = 0;
-				currentBit = 0;
-				byteIndex += 1;
-			}
+			currentBit = currentBlock->matrix[1][1];
+			extractedBits[bitIndex++] = currentBit;
 		}
+    if (bitIndex < gKey)
+    {
+      printf("Error - Extracted data doesnot match key, possible data loss or incorrect key.\n");
+    }
+    else
+    {
+      printf("Message Extracted Successfully\n\n");
+      printf("Extracted Bits: ");
+      for (int i = 0; i < gKey; i++)
+      {
+        printf("%d", extractedBits[i]);
+      }
+      printf("\n");
+    }
 		break;
-
+	}
+	default:
+		printf("Error - Invalid action\n");
+		break;
 	}
 
 	return;

@@ -5,8 +5,8 @@
 
 // Global Variables for File Data Pointers
 
-BITMAPFILEHEADER* gpCoverFileHdr, * gpStegoFileHdr, * gpMsgFileHdr;
-BITMAPINFOHEADER* gpCoverFileInfoHdr, * gpStegoFileInfoHdr, * gpMsgFileInfoHdr;
+BITMAPFILEHEADER* gpCoverFileHdr, * gpStegoFileHdr, * gpMsgFileHdr, * gpTypeFileHdr;
+BITMAPINFOHEADER* gpCoverFileInfoHdr, * gpStegoFileInfoHdr, * gpMsgFileInfoHdr, * gpTypeFileInfoHdr;
 RGBQUAD* gpCoverPalette, * gpStegoPalette;
 unsigned int gCoverFileSize, gMsgFileSize, gStegoFileSize;
 
@@ -18,7 +18,7 @@ char gOutputPathFileName[MAX_PATH], * gOutputFileName;
 //char gInputPathFileName[MAX_PATH], *gInputFileName;
 char gAction;						// typically hide (1), extract (2), wipe (3), randomize (4), but also specifies custom actions for specific programs
 char gNumBits2Hide;
-char* gKey;
+int gKey;
 
 void initGlobals()
 {
@@ -41,6 +41,7 @@ void initGlobals()
 	gStegoFileName = NULL;
 	gAction = 0;						// typically hide (1), extract (2)
 	gNumBits2Hide = 1;
+	gKey = -1;
 
 	return;
 } // initGlobals
@@ -284,7 +285,6 @@ void parseCommandLine(int argc, char* argv[])
 
 			GetFullPathName(argv[cnt], MAX_PATH, gCoverPathFileName, &gCoverFileName);
 		}
-
 		else if (_stricmp(argv[cnt], "-m") == 0)	// msg file
 		{
 			cnt++;
@@ -341,7 +341,7 @@ void parseCommandLine(int argc, char* argv[])
 
 			GetFullPathName(argv[cnt], MAX_PATH, gOutputPathFileName, &gOutputFileName);
 		}
-		else if (_stricmp(argv[cnt], "-key") == 0)	// key file
+		else if (_stricmp(argv[cnt], "-k") == 0)	// key file
 		{
 			cnt++;
 			if (cnt == argc)
@@ -350,7 +350,7 @@ void parseCommandLine(int argc, char* argv[])
 				exit(-1);
 			}
 
-			gKey = argv[cnt];
+			gKey = atoi(argv[cnt]);
 		}
 		/*
 		else if(_stricmp(argv[cnt], "-b") == 0)	// set number of bits to hide per data block
@@ -388,9 +388,9 @@ void parseCommandLine(int argc, char* argv[])
 			{
 				fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
 				exit(-1);
-
-				gAction = ACTION_EXTRACT;
 			}
+			gAction = ACTION_EXTRACT;
+
 		}
 		else
 		{
@@ -404,9 +404,22 @@ void parseCommandLine(int argc, char* argv[])
 			fprintf(stderr, "\n\nError - no action specified.\n\n");
 			exit(-1);
 		}
+		if (cnt == argc && gAction == ACTION_EXTRACT && gKey == -1)
+		{
+			fprintf(stderr, "\n\nError - no key specified.\n\n");
+			exit(-1);
+		}
 		if (cnt == argc && gOutputPathFileName[0] == 0)
 		{
-			GetFullPathName("output.bmp", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+			if(gAction == ACTION_HIDE)
+			{
+				GetFullPathName("hiding_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+			}
+			else if(gAction == ACTION_EXTRACT)
+			{
+				GetFullPathName("extraction_output.bin", MAX_PATH, gOutputPathFileName, &gOutputFileName);
+			}
+
 		}
 
 
@@ -420,6 +433,8 @@ void parseCommandLine(int argc, char* argv[])
 int main(int argc, char* argv[])
 {
 	unsigned char* coverData, * pixelData, * messageData, * msgPixelData;
+	unsigned char* extractBits;
+
 
 	// get the number of bits to use for data hiding or data extracting
 	// if not specified, default to one
@@ -430,31 +445,34 @@ int main(int argc, char* argv[])
 	// take appropriate actions based on user inputs
 	// example opening cover bitmap
 
-	if (gCoverPathFileName[0] != 0)
+	if (gAction == ACTION_HIDE)
 	{
-		coverData = readBitmapFile(gCoverPathFileName, &gCoverFileSize);
-		gAction = (gAction == 0) ? 2 : 1;
-
-		if (!isValidBitMap(coverData))
+		if (gCoverPathFileName[0] != 0)
 		{
-			printf("Error - %s is not a valid bitmap file.\n\n", gCoverPathFileName);
-			exit(-1);
-		}
+			coverData = readBitmapFile(gCoverPathFileName, &gCoverFileSize);
 
-		gpCoverFileHdr = (BITMAPFILEHEADER*)coverData;
+			if (!isValidBitMap(coverData))
+			{
+				printf("Error - %s is not a valid bitmap file.\n\n", gCoverPathFileName);
+				exit(-1);
+			}
 
-		gpCoverFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
+			gpTypeFileHdr = (BITMAPFILEHEADER*)coverData;
 
-		// there might not exist a palette - I don't check here, but you can see how in display info
-		gpCoverPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
+			gpTypeFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
 
-		unsigned char* extractBits;
-		if (gAction == ACTION_HIDE) {
+			// there might not exist a palette - I don't check here, but you can see how in display info
+			gpCoverPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
+
+			pixelData = coverData + gpTypeFileHdr->bfOffBits;
+
+			displayFileInfo(gCoverPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpCoverPalette, pixelData);
+
 			if (_stricmp(gMsgFileName, "random") == 0)
 			{
 				// generate random data
 				srand((unsigned int)time(NULL));
-				unsigned int maxMsgFilesSize = (gpCoverFileInfoHdr->biWidth / 3 * gpCoverFileInfoHdr->biHeight / 3) / 3;
+				unsigned int maxMsgFilesSize = gpTypeFileInfoHdr->biWidth;
 				gMsgFileSize = rand() % maxMsgFilesSize;
 				messageData = (unsigned char*)malloc(sizeof(unsigned char) * gMsgFileSize);
 				printf("Random message data size: %d\n", gMsgFileSize);
@@ -462,48 +480,80 @@ int main(int argc, char* argv[])
 				{
 					messageData[i] = rand() % 256;
 				}
+				msgPixelData = messageData;
 			}
 			else
 			{
 				messageData = readBitmapFile(gMsgPathFileName, &gMsgFileSize);
+				if (isValidBitMap(messageData))
+				{
+					gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
+					gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
+					msgPixelData = messageData + gpTypeFileHdr->bfOffBits;
+				}
+				else
+				{
+					msgPixelData = messageData;
+					gMsgFileSize = strlen((char*)messageData);
+				}
 			}
+			extractBits = (unsigned char*)malloc(sizeof(unsigned char) * 1);
 
-			if (isValidBitMap(messageData))
-			{
-				gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
-				gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
-				msgPixelData = messageData + gpCoverFileHdr->bfOffBits;
-			}
-			else
-			{
-				msgPixelData = messageData;
-				gMsgFileSize = strlen((char*)messageData);
-			}
-			// xxx: this needs to be changed once the extraction part properly works
-			extractBits = (unsigned char*)malloc(sizeof(unsigned char) * 10000000);
 		}
-		else if (gAction == ACTION_EXTRACT)
+		else
 		{
-			msgPixelData = (unsigned char*)malloc(sizeof(unsigned char) * 10000000);
+			printf("Error - no cover file specified.\n\n");
+			exit(-1);
 		}
-
-		pixelData = coverData + gpCoverFileHdr->bfOffBits;
-
-		displayFileInfo(gCoverPathFileName, gpCoverFileHdr, gpCoverFileInfoHdr, gpCoverPalette, pixelData);
-
-
-
-		parsePixelData(gpCoverFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize, extractBits, gAction);
-
-		unsigned char headerData[14];
-		unsigned char headerDataInfo[40];
-		memcpy(headerData, coverData, 14);
-		memcpy(headerDataInfo, coverData + 14, 40);
-		FILE* f1;
-		size_t count = gpCoverFileHdr->bfSize - gpCoverFileHdr->bfOffBits;
-		switch (gAction)
+	}
+	else if (gAction == ACTION_EXTRACT)
+	{
+		if (gStegoPathFileName[0] != 0)
 		{
+			msgPixelData = (unsigned char*)malloc(sizeof(unsigned char) * gKey * 2);
+			coverData = readBitmapFile(gStegoPathFileName, &gStegoFileSize);
+
+
+
+			if (!isValidBitMap(coverData))
+			{
+				printf("Error - %s is not a valid bitmap file.\n\n", gStegoPathFileName);
+				exit(-1);
+			}
+
+			gpTypeFileHdr = (BITMAPFILEHEADER*)coverData;
+
+			gpTypeFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
+
+			pixelData = coverData + gpTypeFileHdr->bfOffBits;
+
+			// there might not exist a palette - I don't check here, but you can see how in display info
+			gpStegoPalette = (RGBQUAD*)((char*)coverData + sizeof(BITMAPFILEHEADER) + sizeof(BITMAPINFOHEADER));
+
+			extractBits = (unsigned char*)malloc(sizeof(unsigned char) * gKey);
+
+
+			//displayFileInfo(gStegoPathFileName, gpTypeFileHdr, gpTypeFileInfoHdr, gpStegoPalette, pixelData);
+		}
+		else
+		{
+			printf("Error - no stego file specified.\n\n");
+			exit(-1);
+		}
+	}
+
+	parsePixelData(gpTypeFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize, extractBits, gKey, gAction);
+
+	unsigned char headerData[14];
+	unsigned char headerDataInfo[40];
+	memcpy(headerData, coverData, 14);
+	memcpy(headerDataInfo, coverData + 14, 40);
+	FILE* f1;
+	size_t count = gpTypeFileHdr->bfSize - gpTypeFileHdr->bfOffBits;
+	switch (gAction)
+	{
 		case ACTION_HIDE:
+		{
 			f1 = fopen(gOutputFileName, "wb");
 			fwrite(headerData, 1, 14, f1);
 			fwrite(headerDataInfo, 1, 40, f1);
@@ -511,19 +561,21 @@ int main(int argc, char* argv[])
 			fwrite(pixelData, 1, count, f1);
 			fclose(f1);
 			break;
+		}
 		case ACTION_EXTRACT:
-			f1 = fopen(gOutputFileName, "w");
-			// directly spit out in hex just to see if extraction works
-			for (size_t i = 0; i < 100; i++)
-			{
-				fprintf(f1, "%02X ", extractBits[i]);
-			}
+		{
+			f1 = fopen(gOutputFileName, "wb");
+			fwrite(headerData, 1, 14, f1);
+			fwrite(headerDataInfo, 1, 40, f1);
+			fwrite(gpStegoPalette, 1, 8, f1);
+			fwrite(extractBits, 1, count, f1);
 			fclose(f1);
 			break;
 		}
-
 	}
 	return 0;
 } // main
+
+
 
 
