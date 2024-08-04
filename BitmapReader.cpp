@@ -349,17 +349,16 @@ void parseCommandLine(int argc, char* argv[])
 
 			gAction = ACTION_HIDE;
 		}
-		// else if(_stricmp(argv[cnt], "-extract") == 0)	// extract
-		// {
-		// 	if(gAction)
-		// 	{
-		// 		fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
-		// 		exit(-1);
-		// 	}
-
-		// 	gAction = ACTION_EXTRACT;
-		// }
-		//*/
+		else if(_stricmp(argv[cnt], "-extract") == 0)	// extract
+		{
+			if(gAction)
+			{
+				fprintf(stderr, "\n\nError, an action has already been specified.\n\n");
+				exit(-1);
+		
+			gAction = ACTION_EXTRACT;
+			}
+		}
 
 		cnt++;
 	} // end while loop
@@ -385,6 +384,7 @@ int main(int argc, char* argv[])
 	if (gCoverPathFileName[0] != 0)
 	{
 		coverData = readBitmapFile(gCoverPathFileName, &gCoverFileSize);
+		gAction = (gAction == 0) ? 2 : 1;
 
 		if (!isValidBitMap(coverData))
 		{
@@ -396,20 +396,20 @@ int main(int argc, char* argv[])
 
 		gpCoverFileInfoHdr = (BITMAPINFOHEADER*)(coverData + sizeof(BITMAPFILEHEADER));
 
-		messageData = readBitmapFile(gMsgPathFileName, &gMsgFileSize);
+		if (gAction == ACTION_HIDE) {
+			messageData = readBitmapFile(gMsgPathFileName, &gMsgFileSize);
 
-		if (isValidBitMap(messageData))
-		{
-			
-			gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
-			gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
-
-			msgPixelData = messageData + gpCoverFileHdr->bfOffBits;
-		}
-		else
-		{
-			msgPixelData = messageData;
-			gMsgFileSize = strlen((char*)messageData);
+			if (isValidBitMap(messageData))
+			{
+				gpMsgFileHdr = (BITMAPFILEHEADER*)messageData;
+				gpMsgFileInfoHdr = (BITMAPINFOHEADER*)(messageData + sizeof(BITMAPFILEHEADER));
+				msgPixelData = messageData + gpCoverFileHdr->bfOffBits;
+			}
+			else
+			{
+				msgPixelData = messageData;
+				gMsgFileSize = strlen((char*)messageData);
+			}
 		}
 
 		// there might not exist a palette - I don't check here, but you can see how in display info
@@ -418,7 +418,33 @@ int main(int argc, char* argv[])
 		pixelData = coverData + gpCoverFileHdr->bfOffBits;
 
 		displayFileInfo(gCoverPathFileName, gpCoverFileHdr, gpCoverFileInfoHdr, gpCoverPalette, pixelData);
-		parsePixelData(gpCoverFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize);
+
+		unsigned char headerData[14];
+		unsigned char headerDataInfo[40];
+		memcpy(headerData, coverData, 14);
+		memcpy(headerDataInfo, coverData + 14, 40);
+
+		// xxx: this needs to be changed once the extraction part properly works
+		unsigned char* extractBits = (unsigned char*)malloc(sizeof(unsigned char) * 10000000);
+		
+		parsePixelData(gpCoverFileInfoHdr, pixelData, msgPixelData, &gMsgFileSize, extractBits, gAction);
+
+		if (gAction == ACTION_HIDE) {
+			FILE* f1 = fopen("EMBED_TEST.bmp", "wb");
+			fwrite(headerData, 1, 14, f1);
+			fwrite(headerDataInfo, 1, 40, f1);
+			fwrite(gpCoverPalette, 1, 8, f1);
+			size_t t = gpCoverFileHdr->bfSize - gpCoverFileHdr->bfOffBits;
+			fwrite(pixelData, 1, t, f1);
+			fclose(f1);
+		} else {
+			FILE* f1 = fopen("EXTRACT_TEST.txt", "w");
+			// directly spit out in hex just to see if extraction works
+			for (size_t i = 0; i < 100; i++) {
+				fprintf(f1, "%02X ", extractBits[i]);
+			}
+			fclose(f1);
+		}
 
 		printf(" %d\n", gMsgFileSize);
 		printf(" %d\n", gpMsgFileHdr->bfSize);
