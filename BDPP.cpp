@@ -1,6 +1,6 @@
 // Block Diagonal Partition Pattern (BDPP) Algorithm
-// Authors: John A. Ortiz
-// Modified by: Roberto Delgado, Mark Solis, Daniel Zartuche
+// Authors: Roberto Delgado, Mark Solis, Daniel Zartuche
+// 
 //
 // This program uses the Block-Diagonal Partition Pattern (BDPP) algorithm to hide and extract data from a bitmap image.
 // This method of hiding was developed by Gyankamal J.Chhajed and Bindu Garg in 2023
