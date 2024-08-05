@@ -585,7 +585,7 @@ int main(int argc, char* argv[])
 				else
 				{
 					msgPixelData = messageData;
-					gMsgFileSize = strlen((char*)messageData);
+					gMsgFileSize *= 8;
 				}
 			}
 			// extract bits needs to bee set to be able to enter parsePixelData, so we allocate the bare minimum

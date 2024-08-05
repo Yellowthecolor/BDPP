@@ -160,7 +160,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 				msgBitCounter++;
 			}
 		}
-		totalMsgBits = msgBitCounter;
+		totalMsgBits = msgBitCounter / 8;
 
 		// This loop checks if a block is embeddable and puts the data in the middle pixel
 		// this occurs until either we run out of blocks, or we run out of message data
@@ -235,7 +235,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
-			if (bitIndex > gKey) break;
+			if (bitIndex >= gKey) break;
 			if (!currentBlock->isEmbeddable) continue;
 
 			currentBit = currentBlock->matrix[1][1] ^ 1;
