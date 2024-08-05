@@ -22,53 +22,8 @@
 //    from the embeddable blocks based on the key value provided.
 //
 
+
 #include "BitmapReader.h"
-
-
-/*
-* Structure: blockRatios
-* Usage: blockRatios currentBlockRatios;
-* ------------------------------------------------------
-* This structure is used to store the ratios for the
-* ratio check. The ratio is 0s and 1s in a 3x3 block 
-* matrix.
-*/
-struct blockRatios
-{
-	int sixToZero = 0;  //  6:0
-	int fiveToOne = 0;   //  5:1
-	int fourToTwo = 0;   //  4:2
-	int threeToThree = 0; // 3:3
-	int twoToFour = 0;   //  2:4
-	int oneToFive = 0;   //  1:5
-	int zeroToSix = 0;   //  0:6
-	int totalUniqueRatios = 0;
-};  // blockRatios
-
-/*
-* Structure: blockInfo
-* Usage: blockInfo currentBlock;
-* ------------------------------------------------------
-* This structure is used to store the information for
-* each 3x3 block in the image. This includes the block
-* number, the 3x3 matrix, the middle pixel, the HVD
-* check, the ratio check, and whether the block is
-* embeddable. It also store the blockRatios structure
-* for the individual blocks.
-*/
-struct blockInfo
-{
-	int blockNumber;  //  used to identify the block, primarily for debugging
-	int matrix[3][3]; // 3x3 matrix of the block, stores the pixel values
-	int H = 0;
-	int V = 0; // Horizontal, Vertical, Diagonal connectivity,
-	int D = 0; // 0 = not connected, 1 = connected
-	int ratioCheck = 0; // 0 = not passed ratio check, 1 = passed ratio check
-	int hvdCheck = 0; // 0 = not passed hvd check, 1 = passed hvd check
-	int isEmbeddable = 0; // 0 = not embeddable, 1 = embeddable
-	unsigned int middlePixel;
-	blockRatios currentBlockRatios;  // structure to store the ratios for the ratio check
-};  // blockInfo
 
 /*
 * Function: parsePixelData
@@ -82,6 +37,7 @@ struct blockInfo
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 	unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractedBits, int gKey, int action)
 {
+	// stor information about the image, to measure the size and block capacity
 	unsigned int numberOfPixels = pFileInfo->biWidth * pFileInfo->biHeight;
 	unsigned int imageSize = pFileInfo->biSizeImage;
 	unsigned char* bitsInImage;
@@ -89,6 +45,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 	unsigned char* bitsInMsg;
 	bitsInMsg = (unsigned char*)malloc(sizeof(unsigned char) * numberOfPixels);
 
+	// This loop checks every byte in the pixel data and stores the bits, in little endian order 7 -> 0
 	int bitCounter = 0;
 	for (int i = 0; i < imageSize; i++)
 	{
@@ -99,14 +56,29 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			bitCounter++;
 		}
 	}
+
+	// the blocks calculated here are used in most checks, as ensuring every block is reachable is important
 	int blockHeight = floor(pFileInfo->biHeight / 3);
 	int blockWidth = floor(pFileInfo->biWidth / 3);
 	int totalPossibleBlocks = blockWidth * blockHeight;
 
+	// create an array to be used the information of each block that is tested through the BDPP algorithm
 	blockInfo* blockArray;
 	blockArray = (blockInfo*)malloc(sizeof(blockInfo) * totalPossibleBlocks);
 
 
+	// This loop is a bit complicated, however what it is essentially doing is parsing through the pixel data
+	// as if it were a coordinate greed so that it can generate the blocks
+	// the blocks are generated in from the bottom to the top, storing the 3 bits from a row
+	// then moving to the next row and storing the 3 bits from that row. Doing that 3 times, and going back
+	// to the first row and moving to the next block. This is done until all blocks are generated. 
+	// NOTE: the paper originally had the blocks generated from the top to the bottom, but I did not realize
+	// until I had alread implemented most of the code.
+	// eg. 
+	// the matrix will look like this:
+	// 0 1 0 <- pixels 2048 2049 2050
+	// 0 1 1 <- pixels 1024 1025 1026
+	// 1 1 0 <- pixels 0    1    2
 	bitCounter = 0;
 	int multiplier = 0;
 	int breakingpoint = 0;
@@ -127,7 +99,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 				{
 					int pixelX = blockX + l;
 					int pixelY = blockY + k;
-					size_t byteIndex = (pixelY * rowSize) + (pixelX / 8);
+					size_t currentPixelIndex = (pixelY * rowSize) + (pixelX / 8);
 					size_t bitIndex = 7 - (pixelX % 8);
 					if (bitCounter + pFileInfo->biWidth * multiplier >= numberOfPixels)
 					{
@@ -135,7 +107,7 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 						break;
 					}
 
-					currentBlock.matrix[k][l] = (pixelData[byteIndex] & (1 << bitIndex)) ? 1 : 0;
+					currentBlock.matrix[k][l] = (pixelData[currentPixelIndex] & (1 << bitIndex)) ? 1 : 0;
 					bitCounter++;
 				}
 				if (breakingpoint) break;
@@ -151,8 +123,10 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 
 		}
 		if (breakingpoint) break;
-	}
+	}  // end of block generation for loop
 
+	// This is where the BDPP algorithm is done on the blocks
+	// the count of embeddable blocks will determine our hiding capacity
 	int embeddableBlocks = 0;
 	for (int i = 0; i < totalPossibleBlocks; i++)
 	{
@@ -164,15 +138,18 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		if (!blockArray[i].isEmbeddable) continue;
 		embeddableBlocks++;
 	}
+
+
 	unsigned int msgBitCounter = 0;
 	unsigned int totalMsgBits = 0;
 	unsigned char currentBit = 0;
 	size_t bitIndex = 0;
-	size_t byteIndex = 0;
+	size_t currentPixelIndex = 0;
 	switch (action)
 	{
 	case ACTION_HIDE:
 	{
+		// This loop reads the message data and counts it, so it can be used to generate a key laters
 		msgBitCounter = 0;
 		for (int i = 0; i < *gMsgFileSize; i++)
 		{
@@ -185,6 +162,8 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		}
 		totalMsgBits = msgBitCounter;
 
+		// This loop checks if a block is embeddable and puts the data in the middle pixel
+		// this occurs until either we run out of blocks, or we run out of message data
 		for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
@@ -195,6 +174,8 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 			currentBit = bitsInMsg[bitIndex++]; // use bit before incrementing
 			currentBlock->matrix[1][1] = currentBit;
 		}
+		// This is where the key is generated, user may not extract completely if they do not
+		// have this key. The key is just the number of bits used to hide the message.
 		gKey = bitIndex;
 		if (bitIndex < totalMsgBits)
 		{
@@ -212,8 +193,10 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 		printf("Hiding Capacity: %d bits | %d bytes\n", embeddableBlocks, embeddableBlocks / 8);
 		printf("Percentage Capacity Used: %.2f%%\n", (float)bitIndex / (float)embeddableBlocks * 100);
 
-		// Modify pixelData using totalPossibleBlocks.
-		int randomCounter = 0;
+		// This is where we reassemble the pixels from the blocks to make the new image
+		// This is for some reason stores the hidden data bits flipped, which I was not able to fix
+		// So perhaps it is something to do in the future, if needed. 
+		// At the moment the bits are being flipped when extracting to "fix" the problem
 		rowSize = ((pFileInfo->biWidth + 7) / 8 + 3) & ~3;
 		for (int k = 0; k < totalPossibleBlocks; k++)
 		{
@@ -225,15 +208,17 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 				{
 					int px = blockX + j;
 					int py = blockY + i;
-					size_t byteIndex = (py * rowSize) + (px / 8);
+					size_t currentPixelIndex = (py * rowSize) + (px / 8);
 					size_t bitIndex = 7 - (px % 8);
+					// This if statement is where the bit flipping issue is happening,
+					// Marc may have to fix it since he implemented the writing of the image
 					if (blockArray[k].matrix[i][j] == 1)
 					{
-						pixelData[byteIndex] |= (1 << bitIndex);
+						pixelData[currentPixelIndex] |= (1 << bitIndex);
 					}
 					else
 					{
-						pixelData[byteIndex] &= ~(1 << bitIndex);
+						pixelData[currentPixelIndex] &= ~(1 << bitIndex);
 					}
 				}
 			}
@@ -242,6 +227,11 @@ void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
 	}
 	case ACTION_EXTRACT:
 	{
+
+		// This is a simple loop, it checks if a block is embeddable and extracts the 
+		// data from the middle pixel. This occurs until we run out of blocks or 
+		// we run out of message data, which is determined by the key value (gKey)
+		// which is provided during hiding, and the user must provide it
 		for (int i = 0; i < totalPossibleBlocks; i++)
 		{
 			blockInfo* currentBlock = &blockArray[i];
@@ -418,8 +408,17 @@ void diagonalPartition(blockInfo* currentBlock, int blockNumber)
 	}
 
 	return;
-}
+}  // diagonalPartition
 
+
+/*
+* Function: checkBlockRatios
+* Usage: checkBlockRatios(&currentBlockRatios, checkedValue);
+* ------------------------------------------------------
+* This function is used to check the ratio of 0s to 1s
+* in a block. The ratios are 6:0, 5:1, 4:2, 3:3,
+* 2:4, 1:5, 0:6. This is called by diagonalPartition
+*/
 void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue)
 {
 	for (int i = 6; i >= 0; i--)
@@ -456,9 +455,19 @@ void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue)
 		}
 	}
 	return;
-}
+}  // checkBlockRatios
 
-// Test connectivitity of consecutive 0s in the matrix
+
+/*
+* Function: connectivityTest
+* Usage: connectivityTest(&blockArray[i], blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function is used to check the connectivity of 0s
+* in a block. The block must have at least 2 zeros
+* connected horizontally, vertically, and diagonally to
+* pass the HVD check. This is done after the ratio check.
+* If the block is HVD connected (hvdCheck = 1).
+*/
 void connectivityTest(blockInfo* currentBlock, int blockNumber)
 {
 	int i, j;
@@ -476,12 +485,14 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 		if (currentBlock->matrix[i][j] == 0)
 		{
 			// Horizontal connectivity check
+			// The second column [j] is used as a key point
 			if (currentBlock->matrix[i][j - 1] == 0 || currentBlock->matrix[i][j + 1] == 0)
 			{
 				currentBlock->H = 1;
 			}
 
 			// Diagonal connectivity check
+			// The second column [j] at i = 0 and i = 1 are used to check diagonally downwards
 			if (i == 1 || i == 0)
 			{
 				if (currentBlock->matrix[i + 1][j - 1] == 0 || currentBlock->matrix[i + 1][j + 1] == 0)
@@ -489,6 +500,7 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 					currentBlock->D = 1;
 				}
 			}
+			// The second column [j] at i = 1 and i = 2 are used to check diagonally upwards
 			if (i == 1 || i == 2)
 			{
 				if (currentBlock->matrix[i - 1][j - 1] == 0 || currentBlock->matrix[i - 1][j + 1] == 0)
@@ -506,6 +518,7 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 		if (currentBlock->matrix[i][j] == 0)
 		{
 			// Vertical connectivity check
+			// The second row [i] is used as a key point
 			if (currentBlock->matrix[i + 1][j] == 0 || currentBlock->matrix[i - 1][j] == 0)
 			{
 				currentBlock->V = 1;
@@ -513,6 +526,7 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 		}
 	}
 
+	// Assuming the block is HVD connected if it passes all three checks above
 	if (currentBlock->H && currentBlock->V && currentBlock->D)
 	{
 		currentBlock->hvdCheck = 1;
@@ -522,8 +536,19 @@ void connectivityTest(blockInfo* currentBlock, int blockNumber)
 		currentBlock->hvdCheck = 0;
 	}
 	return;
-}
+}  // connectivityTest
 
+/*
+* Function: embedData
+* Usage: embedData(&blockArray[i], blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function is used to "embed" data into the
+* embeddable blocks. It first flips the middle pixel
+* then calls diagonalPartition, and connectivityTest
+* to check if the block is embeddable. If the block is
+* embeddable (isEmbeddable = 1) then the middle pixel
+* is flipped back to its original value.
+*/
 void embedData(blockInfo* currentBlock, int blockNumber)
 {
 	int temp = currentBlock->matrix[1][1];
@@ -536,6 +561,7 @@ void embedData(blockInfo* currentBlock, int blockNumber)
 		printf("Error - %d is not a bit. Data may not be binary.\n\n", currentBlock->matrix[1][1]);
 		exit(-1);
 	}
+	// Must pass tests after flipping the middle pixel to be embeddable
 	diagonalPartition(currentBlock, blockNumber);
 	connectivityTest(currentBlock, blockNumber);
 	if (!currentBlock->ratioCheck || !currentBlock->hvdCheck)
@@ -545,4 +571,4 @@ void embedData(blockInfo* currentBlock, int blockNumber)
 		return;
 	}
 	currentBlock->isEmbeddable = 1;
-}
+}  // embedData

@@ -217,6 +217,26 @@ void Usage(char* programName)
 	strcpy(prgname, &programName[idx + 1]);
 	fprintf(stdout, "\n\n");
 	fprintf(stdout, " ***** %s Version: %s ***** \n       ... by John A. Ortiz, Roberto Delgado, Mark Solis, Daniel Zartuche\n\n", prgname, VERSION);
+
+	fprintf(stdout, "BDPP ALGORITHM INFORMATION\n");
+	fprintf(stdout, "This program uses the Block-Diagonal Partition Pattern (BDPP) algorithm to hide and extract data from a bitmap image.\n");
+	fprintf(stdout, "This method of hiding was developed by Gyankamal J.Chhajed and Bindu Garg in 2023\n");
+	fprintf(stdout, "This program's implementation of the BDPP algorithm was designed by Roberto Delgado\n\n");
+
+	fprintf(stdout, "The algorithm is as follows:\n");
+	fprintf(stdout, "\t1. The image is divided into 3x3 blocks.\n");
+	fprintf(stdout, "\t2. Each block is then diagonally partitioned into 4 sections. Pixels split in half are counted as whole.\n");
+	fprintf(stdout, "\t3. Each section is checked for a ratio of 0s to 1s in the block's matrix. The ratios are 6:0, 5:1, 4:2, 3:3, 2:4, 1:5, 0:6.\n");
+	fprintf(stdout, "\t4. If a block has 2 or more unique ratios, it passes the ratio check.\n");
+	fprintf(stdout, "\t5. The block is then checked for horizontal, vertical, and diagonal connectivity of 0s.\n");
+	fprintf(stdout, "\t   this means that there must be at least 2 zeros connected horizontally, vertically, and diagonally.\n");
+	fprintf(stdout, "   if this is true then the block is said to be HVD connected.\n");
+	fprintf(stdout, "\t6. If the block passes both the ratio check and the HVD check, then the block is embeddable.\n");
+	fprintf(stdout, "\t7. The middle pixel of the block is then flipped steps 2-5 are repeated for all blocks.\n");
+	fprintf(stdout, "\t8. If the block still passes both checks, then the middle pixel is flipped back to its original value.\n");
+	fprintf(stdout, "\t   and the block is marked as embeddable.\n");
+	fprintf(stdout, "\t9. The program then embeds the message data into the embeddable blocks or if extracting, extracts the data\n");
+
 	fprintf(stdout, "USAGE INFORMATION\n\n");
 
 	fprintf(stdout, "Print Bitmap Information:\n");
@@ -539,7 +559,7 @@ int main(int argc, char* argv[])
 
 			//  check if message is random, if so generate random data based on the cover image width 
 			// (almost guarantees data will be small enough to hide)
-			if (_stricmp(gMsgFileName, "random") == 0)  
+			if (_stricmp(gMsgFileName, "random") == 0)
 			{
 				// generate random data
 				srand((unsigned int)time(NULL));

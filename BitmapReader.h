@@ -21,6 +21,60 @@
 
 #define VERSION "1.0"
 
+/*
+* Structure: blockRatios
+* Usage: blockRatios currentBlockRatios;
+* ------------------------------------------------------
+* This structure is used to store the ratios for the
+* ratio check. The ratio is 0s and 1s in a 3x3 block
+* matrix.
+*/
+struct blockRatios
+{
+    int sixToZero = 0;  //  6:0
+    int fiveToOne = 0;   //  5:1
+    int fourToTwo = 0;   //  4:2
+    int threeToThree = 0; // 3:3
+    int twoToFour = 0;   //  2:4
+    int oneToFive = 0;   //  1:5
+    int zeroToSix = 0;   //  0:6
+    int totalUniqueRatios = 0;
+};  // blockRatios
+
+/*
+* Structure: blockInfo
+* Usage: blockInfo currentBlock;
+* ------------------------------------------------------
+* This structure is used to store the information for
+* each 3x3 block in the image. This includes the block
+* number, the 3x3 matrix, the middle pixel, the HVD
+* check, the ratio check, and whether the block is
+* embeddable. It also store the blockRatios structure
+* for the individual blocks.
+*/
+struct blockInfo
+{
+    int blockNumber;  //  used to identify the block, primarily for debugging
+    int matrix[3][3]; // 3x3 matrix of the block, stores the pixel values
+    int H = 0;
+    int V = 0; // Horizontal, Vertical, Diagonal connectivity,
+    int D = 0; // 0 = not connected, 1 = connected
+    int ratioCheck = 0; // 0 = not passed ratio check, 1 = passed ratio check
+    int hvdCheck = 0; // 0 = not passed hvd check, 1 = passed hvd check
+    int isEmbeddable = 0; // 0 = not embeddable, 1 = embeddable
+    unsigned int middlePixel;
+    blockRatios currentBlockRatios;  // structure to store the ratios for the ratio check
+};  // blockInfo
+
+/*
+* Function: parsePixelData
+* Usage: parsePixelData(pFileInfo, pixelData, msgPixelData, gMsgFileSize, extractedBits, gKey, action);
+* ------------------------------------------------------
+* This function is used to parse the pixel data from the
+* image run the BDPP algorithm to embed or extract data
+* and then reassamble the pixel data to be written back,
+* or to be used for extraction.
+*/
 void parsePixelData(BITMAPINFOHEADER* pFileInfo, unsigned char* pixelData,
     unsigned char* msgPixelData, unsigned int* gMsgFileSize, unsigned char* extractBytes, int gKey, int action);
 
@@ -44,9 +98,42 @@ void printMatrix(blockInfo* block);
 * it passes the ratio check (ratioCheck = 1).
 */
 void diagonalPartition(blockInfo* currentBlock, int blockNumber);
+
+/*
+* Function: checkBlockRatios
+* Usage: checkBlockRatios(&currentBlockRatios, checkedValue);
+* ------------------------------------------------------
+* This function is used to check the ratio of 0s to 1s
+* in a block matrix. The ratios are 6:0, 5:1, 4:2, 3:3,
+* 2:4, 1:5, 0:6. This is called by diagonalPartition
+*/
 void checkBlockRatios(blockRatios* currentBlockRatios, int checkedValue);
+
+/*
+* Function: connectivityTest
+* Usage: connectivityTest(&blockArray[i], blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function is used to check the connectivity of 0s
+* in a block. The block must have at least 2 zeros
+* connected horizontally, vertically, and diagonally to
+* pass the HVD check. This is done after the ratio check.
+* If the block is HVD connected (hvdCheck = 1).
+*/
 void connectivityTest(blockInfo* currentBlock, int blockNumber);
+
+/*
+* Function: embedData
+* Usage: embedData(&blockArray[i], blockArray[i].blockNumber);
+* ------------------------------------------------------
+* This function is used to "embed" data into the
+* embeddable blocks. It first flips the middle pixel
+* then calls diagonalPartition, and connectivityTest
+* to check if the block is embeddable. If the block is
+* embeddable (isEmbeddable = 1) then the middle pixel
+* is flipped back to its original value.
+*/
 void embedData(blockInfo* currentBlock, int blockNumber);
+
 // the following structure information is taken from wingdi.h
 
 /* constants for the biCompression field
