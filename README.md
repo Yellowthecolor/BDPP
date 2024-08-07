@@ -1,5 +1,4 @@
 # BDPP
-Team 10
 Project implementing Block-Diagonal Partition Pattern (BDPP) for hiding data in binary images.
 
 When embedding a plain text file into an image and then extracting it, the output binary will 
